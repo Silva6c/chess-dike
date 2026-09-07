@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="light_blue_600">#FF039BE5</color>
+    <color name="light_blue_900">#FF01579B</color>
+    <color name="light_blue_A200">#FF40C4FF</color>
+    <color name="light_blue_A400">#FF00B0FF</color>
+    <color name="black_overlay">#66000000</color>
+    <color name="choice_color_1">#fffa00</color>
+    <color name="choice_color_2">#ff9500</color>
+    <color name="choice_color_3">#5ed500</color>
+    <color name="choice_color_4">#ffbb00</color>
+    <color name="choice_color_5">#00c6b0</color>
+    <color name="move_history_background">#0D000000</color>
+    <color name="game_hint_background">#80FFFFFF</color>
+
+</resources>

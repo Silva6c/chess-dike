@@ -1,0 +1,52 @@
+# 持续集成：推送/PR 时自动构建 Release APK，并发布 Release
+name: Build-XQDK
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - 'docs/**'
+  pull_request:
+    branches: [ main ]
+
+# 创建 Release 需要 contents 写权限
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+
+    # versionCode = git 提交数（见 app/build.gradle.kts 的 gitVersion），需要完整历史
+    - name: checkout codes
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: '0'
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: gradle
+
+    - name: Assemble Release APKs
+      run: ./gradlew assembleArmv8-Release assembleArmv8-dotprod-Release --stacktrace
+
+    - name: Zip APKs
+      run: |
+        mkdir -p dist
+        find app/build/outputs/apk -name "*.apk" -exec cp {} dist/ \;
+        cd dist
+        for f in *.apk; do zip "${f%.apk}.zip" "$f"; done
+        ls -l
+
+    # 仅推送到 main 时发布 Release；PR 构建只做编译验证
+    - name: Create Release
+      if: github.event_name == 'push'
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        VER=$(git rev-list HEAD --count)
+        gh release create "v$VER" --title "Release $VER" --notes "象棋迪克 XQDK 自动构建（versionCode=$VER）" dist/*.zip

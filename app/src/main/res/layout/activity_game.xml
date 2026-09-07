@@ -1,0 +1,263 @@
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/constraintlayout"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/boardbg_repeat"
+    android:theme="@style/ThemeOverlay.ChineseChess.FullscreenContainer"
+    tools:context=".GameActivity">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:orientation="horizontal"
+            android:paddingTop="4dp"
+            android:paddingBottom="8dp">
+
+            <ImageButton
+                android:id="@+id/playerbt"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="6dp"
+                android:background="?android:attr/selectableItemBackground"
+                android:src="@drawable/computer" />
+
+            <ImageButton
+                android:id="@+id/playerbackbt"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="6dp"
+                android:background="?android:attr/selectableItemBackground"
+                app:srcCompat="@drawable/arrow_back" />
+
+            <ImageButton
+                android:id="@+id/playerforwardbt"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="6dp"
+                android:background="?android:attr/selectableItemBackground"
+                app:srcCompat="@drawable/arrow_forward" />
+
+            <ImageButton
+                android:id="@+id/autoplaybt"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="6dp"
+                android:background="?android:attr/selectableItemBackground"
+                app:srcCompat="@drawable/play_circle" />
+
+            <ImageButton
+                android:id="@+id/playeraltbt"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="6dp"
+                android:background="?android:attr/selectableItemBackground"
+                app:srcCompat="@drawable/alt_route" />
+
+            <ImageButton
+                android:id="@+id/quickbt"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="6dp"
+                android:background="?android:attr/selectableItemBackground"
+                app:srcCompat="@drawable/quick" />
+
+            <ImageButton
+                android:id="@+id/optionbt"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="6dp"
+                android:background="?android:attr/selectableItemBackground"
+                app:srcCompat="@drawable/tune" />
+
+        </LinearLayout>
+
+        <FrameLayout
+            android:id="@+id/chesslayout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_weight="0"
+            android:minHeight="200dp">
+
+        </FrameLayout>
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:orientation="horizontal"
+            android:paddingTop="8dp"
+            android:paddingBottom="4dp">
+
+            <ImageButton
+                android:id="@+id/newbt"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="4dp"
+                android:background="?android:attr/selectableItemBackground"
+                app:srcCompat="@drawable/new_window" />
+
+            <ImageButton
+                android:id="@+id/importbt"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="4dp"
+                android:background="?android:attr/selectableItemBackground"
+                app:srcCompat="@drawable/import_fen" />
+
+            <ImageButton
+                android:id="@+id/exportbt"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="4dp"
+                android:background="?android:attr/selectableItemBackground"
+                app:srcCompat="@drawable/export" />
+
+
+            <ImageButton
+                android:id="@+id/backbt"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:layout_marginHorizontal="4dp"
+                android:background="?android:attr/selectableItemBackground"
+                app:srcCompat="@drawable/arrow_back" />
+
+
+            <ImageButton
+                android:id="@+id/helpbt"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="4dp"
+                android:background="?android:attr/selectableItemBackground"
+                app:srcCompat="@drawable/help" />
+
+            <ImageButton
+                android:id="@+id/stophelpbt"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="4dp"
+                android:background="?android:attr/selectableItemBackground"
+                app:srcCompat="@drawable/quick" />
+
+            <ImageButton
+                android:id="@+id/trendsbt"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="4dp"
+                android:background="?android:attr/selectableItemBackground"
+                app:srcCompat="@drawable/history" />
+
+            <ImageButton
+                android:id="@+id/exitbt"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="4dp"
+                android:background="?android:attr/selectableItemBackground"
+                app:srcCompat="@drawable/logout" />
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="30dp"
+            android:background="@color/game_hint_background"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="30dp"
+                android:layout_gravity="center"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/statustv"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:text="TextView"
+                    android:textSize="16sp" />
+
+                <ImageButton
+                    android:id="@+id/choice1bt"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginHorizontal="2dp"
+                    android:background="?android:attr/selectableItemBackground"
+                    android:visibility="gone"
+                    app:srcCompat="@drawable/looks_1" />
+
+                <ImageButton
+                    android:id="@+id/choice2bt"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginHorizontal="2dp"
+                    android:background="?android:attr/selectableItemBackground"
+                    android:visibility="gone"
+                    app:srcCompat="@drawable/looks_2" />
+
+                <ImageButton
+                    android:id="@+id/choice3bt"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginHorizontal="2dp"
+                    android:background="?android:attr/selectableItemBackground"
+                    android:visibility="gone"
+                    app:srcCompat="@drawable/looks_3" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:baselineAligned="false"
+            android:orientation="horizontal">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:gravity="center_horizontal"
+                android:orientation="vertical">
+
+                <ScrollView
+                    android:id="@+id/historyscroll"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="@color/move_history_background">
+
+                    <TableLayout
+                        android:id="@+id/historyTable"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent">
+                    </TableLayout>
+
+                </ScrollView>
+
+                <com.github.mikephil.charting.charts.LineChart
+                    android:id="@+id/trendchart"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="@color/move_history_background"
+                    android:visibility="gone" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+    </LinearLayout>
+</androidx.constraintlayout.widget.ConstraintLayout>
