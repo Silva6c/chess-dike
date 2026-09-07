@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/chessbg"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="象棋迪克 · 连线识别指导"
+            android:textColor="#FFFFFF"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="识别其他象棋App的画面，在悬浮窗给出走法建议。\n本功能只识别、只提示，不会自动走子（无无障碍服务、无点击注入）。"
+            android:textColor="#B0BEC5"
+            android:textSize="13sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="使用步骤（全自动识别）：\n① 授予悬浮窗 → ② 通知 → ③ 授权录屏并启动 → ④ 切到任意象棋 App 对局界面即可——自动找棋盘、自动识别方向，悬浮窗实时给出我方建议"
+            android:textColor="#FFCC80"
+            android:textSize="13sp" />
+
+        <TextView
+            android:id="@+id/tv_auto_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:gravity="center"
+            android:text="状态：尚未启动"
+            android:textColor="#90CAF9"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btn_overlay_permission"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="① 授予悬浮窗权限"
+            android:textSize="15sp" />
+
+        <Button
+            android:id="@+id/btn_notification_permission"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="② 通知权限（Android 13+）"
+            android:textSize="15sp" />
+
+        <Button
+            android:id="@+id/btn_start_capture"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="③ 开始屏幕识别（全自动识别棋盘）"
+            android:textSize="15sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:text="合规声明：本功能仅通过系统录屏授权做画面识别并显示走法建议，属于象棋学习辅助工具，仅供学习研究，请于获取后24小时内自行删除。不包含自动走子、触摸注入、无障碍服务、Root/Xposed 或读取其他应用数据；对局中的所有着法均由玩家手动操作。"
+            android:textColor="#78909C"
+            android:textSize="11sp" />
+    </LinearLayout>
+</ScrollView>

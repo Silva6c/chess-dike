@@ -1,0 +1,48 @@
+# Gradle files
+.gradle/
+build/
+
+# Local configuration file (sdk path, etc)
+local.properties
+
+# Log/OS Files
+*.log
+
+# Android Studio generated files and folders
+captures/
+.externalNativeBuild/
+.cxx/
+output.json
+
+tinypinyin/bin/
+
+# IntelliJ
+*.iml
+.idea/
+misc.xml
+deploymentTargetDropDown.xml
+render.experimental.xml
+
+# Keystore files
+#*.jks
+#*.keystore
+
+# Google Services (e.g. APIs or Firebase)
+google-services.json
+
+# Android Profiling
+*.hprof
+
+# python pyc
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+
+# ==== 版权物：仅保留在本地工作区，不随 git 仓库分发 ====
+# 桔库开局库（第三方版权内容；缺失时对弈/连线自动降级为纯引擎模式）
+app/src/main/assets/databases/
+# 内置棋谱书（第三方版权内容；打谱页可自行导入 .xqf/.pgn）
+app/src/main/assets/XQF/**
+!app/src/main/assets/XQF/README.txt

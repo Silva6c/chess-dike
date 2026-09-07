@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>象棋迪克 · 使用说明</title>
+<style>
+  body { font-family: sans-serif; background:#1e2430; color:#e8e6e1; margin:0; padding:16px; line-height:1.7; }
+  h1 { font-size:20px; color:#ffd54f; }
+  h2 { font-size:16px; color:#ffd54f; margin-top:22px; }
+  li { margin:4px 0; }
+  .disclaimer { background:#3a2a2a; border:1px solid #b06a6a; border-radius:8px; padding:10px 12px; margin-top:20px; font-size:13px; }
+  .credits { color:#9fb3c8; font-size:12px; margin-top:16px; }
+</style>
+</head>
+<body>
+<h1>象棋迪克 · 使用说明</h1>
+
+<h2>对弈</h2>
+<ul>
+  <li>执红/执黑、固定深度或固定时间、开局库、Hash 盘面大小等均可在对弈设置中调整；</li>
+  <li>引擎为 Pikafish（含 dotprod 优化变体），多线程满核运行。</li>
+</ul>
+
+<h2>连线（AI 屏幕识别指导）</h2>
+<ul>
+  <li>① 授予悬浮窗 → ② 允许通知 → ③ 授权录屏并启动；</li>
+  <li>切到任意象棋 App 对局界面即可：YOLO 自动找棋盘、自动识别朝向，悬浮窗实时给出我方建议；</li>
+  <li>面板按钮：<b>变招</b>（切换候选）、<b>悔棋</b>（回退一步）、<b>手动</b>（识别失效时在小棋盘上手工维护局面）、
+      <b>深度</b>（12/20/24 三档）、<b>Hash</b>（引擎置换表大小，从 256MB 起循环调节）、
+      <b>更新棋局</b>（纠正行棋方）、<b>停止/关闭</b>（关闭需二次确认）；</li>
+  <li>点击迷你棋盘可切换候选着法；建议成熟显示绿色箭头，暂定为蓝色。</li>
+</ul>
+
+<h2>合规与免责声明</h2>
+<div class="disclaimer">
+  本应用（象棋迪克）仅供个人学习、研究与文化交流使用，严禁用于商业用途或任何违反法律法规、游戏平台规则的情形；
+  请于获取后 <b>24 小时内自行删除</b>。本应用不含自动对弈、点击注入、无障碍服务、Root/Xposed 等功能，
+  对局中的所有操作均由玩家本人完成；因使用本应用产生的一切后果由使用者自行承担。
+</div>
+
+<p class="credits">
+  鸣谢：原项目"象棋鱼"（作者 zfdang）· YOLO 权重来自 VinXiangQi 项目 · 引擎与框架基座 Pikafish / DroidFish（GPL-3.0）
+</p>
+</body>
+</html>

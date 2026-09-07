@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="UTF-8">
+    <title>象棋鱼 by zfdang - Help</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" type="text/css" href="stylesheets/normalize.css" media="screen">
+    <link href='http://fonts.loli.net/css?family=Open+Sans:400,700' rel='stylesheet' type='text/css'>
+    <link rel="stylesheet" type="text/css" href="stylesheets/stylesheet.css" media="screen">
+    <link rel="stylesheet" type="text/css" href="stylesheets/github-light.css" media="screen">
+  </head>
+  <body>
+    <section class="main-content">
+
+      <h3>象棋鱼--帮助</h3>
+
+<p>项目主页: <a href="https://fish.zfdang.com/">象棋鱼</a></p>
+
+<hr>
+<h3>1. 工具栏介绍</h3>
+
+<div class="imgbox">
+    <a href="images/interface.png"><img class="center-fit" src='images/interface.png' style="max-width: 300px"></a>
+</div>
+
+
+<h4>说明：</h4>
+
+<ui>
+  <li>强制电脑变着：如果电脑的出着不符合预期的话，可以要求电脑变着，电脑将悔棋并提供3个候选着法</li>
+  <li>寻求帮助：当己方出着时，可以寻求帮助，引擎会提供3个候选着法</li>
+  <li>闪电出着：当电脑在搜索着法或者己方在寻求帮助时，点击将结束搜索，立刻返回结果</li>
+  <li>从FEN开局：直接输入FEN字符串开局</li>
+  <li>状态提示：红帅表示该红方出着；黑将表示该黑方出着；神经元表示思考中...</li>
+
+</ui>
+
+
+<h3>2. 寻求帮助的结果</h3>
+
+<b>寻求帮助，或者强制电脑变着后，会出现如下结果（绿色箭头）：</b>
+
+<br><br>
+
+
+<div class="imgbox">
+    <a href="images/multipv.jpg"><img class="center-fit" src='images/multipv.jpg' style="max-width: 300px"></a>
+</div>
+
+<br>
+
+此时可以直接点击状态提示栏的数字，选择着法。
+<br>
+也可以忽略提示的着法，在棋盘上直接出着
+
+<hr>
+
+<h3>3. 设置界面</h3>
+
+<div class="imgbox">
+    <a href="images/multipv.png"><img class="center-fit" src='images/settings.png' style="max-width: 300px"></a>
+</div>
+
+<h4>3.1 支持红方先行或黑方先行</h4>
+
+<ui>
+  <li>缺省为红方先行</li>
+  <li>取消勾选后，为黑方先行；如果设置了电脑执黑且自动走棋，则黑方在开局后会自动走棋</li>
+  <li>只针对新建游戏有效</li>
+</ui>
+
+
+<h4>3.2 增加电脑走棋的随机性</h4>
+
+<ui>
+  <li>缺省不勾选</li>
+  <li>勾选后，在最初的12步内，电脑会在几个可能的着法之间随机选择一个；增加随机性，但是同时会降低电脑的棋力</li>
+  <li>这个功能的目的，是避免电脑每次都走一样的着法，跟电脑对弈会无聊</li>
+</ui>
+
+<h4>3.4 Hash大小</h4>
+
+<ui>
+  <li>缺省为256M</li>
+  <li>越大越好，但是大了程序可能会崩溃</li>
+</ui>
+
+<h4>3.5 引擎搜索设置</h4>
+
+<h5>支持三种模式的引擎搜索方法：</h5>
+
+<ui>
+  <li>设定搜索深度：引擎在搜索固定深度后自动返回。设置的数值越高，需要越长时间来完成搜索。</li>
+  <li>设定固定搜索时间：引擎在搜索固定时间后自动返回</li>
+  <li>无限搜索：引擎一直搜索，直到用户点击“闪电出着”</li>
+</ui>
+
+<hr>
+
+<h3>4. 常见问题</h3>
+
+<h4>4.1 引擎下棋的速度太慢了，该怎么办？</h4>
+
+这时候，需要调整引擎搜索方法，降低搜索的深度，或者设置更短的固定搜索时间，再或者更换更好的手机...
+
+<h4>4.2 有两个apk, 我该下载哪个apk？</h4>
+
+有两个版本：
+
+<ui>
+  <li>chessfish-armv8-dotprod.zip：如果你的手机是最近几年买的，你的CPU支持dotprod技术，那么就下载这个。</li>
+  <li>chessfish-armv8.zip：dotprod版本没法正常工作，就下载这个</li>
+</ui>
+
+
+
+<h4>4.3 发现程序的bug该怎么办？</h4>
+
+将棋盘的FEN导出，然后在github上创建个issue. 如果不会上述操作，那...
+
+    </section>
+
+  
+  </body>
+</html>
