@@ -1,13 +1,8 @@
-# 持续集成：推送/PR 时自动构建 Release APK，并发布 Release
+# 持续集成：仅手动触发（Actions 页面 Run workflow），推送不自动构建
 name: Build-XQDK
 
 on:
-  push:
-    branches: [ main ]
-    paths-ignore:
-      - 'docs/**'
-  pull_request:
-    branches: [ main ]
+  workflow_dispatch:
 
 # 创建 Release 需要 contents 写权限
 permissions:
