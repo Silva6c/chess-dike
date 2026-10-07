@@ -62,6 +62,28 @@ public class ChessView extends SurfaceView implements SurfaceHolder.Callback {
 
     public GameController controller;
 
+    // ==== 重绘同步（根因 1/2/3：脏标志驱动，替代"每 100ms 无条件全盘重绘"）====
+    /** 渲染锁：保护脏标志；刷帧线程无脏时在它上面休眠，requestRender 置脏后立刻唤醒 */
+    private final Object renderLock = new Object();
+    /** 脏标志：初始 true 保证新 surface 首帧必画；此后只在局面/高亮/箭头状态变化时置位 */
+    private boolean renderDirty = true;
+
+    // ==== 绘制对象复用（根因 8：原实现每帧每格 new，GC 抖动丢帧）====
+    // 绘制只发生在唯一刷帧线程，这些复用字段无并发冲突
+    private final Position reusePos = new Position(0, 0);
+    private final Rect reuseSrcRect = new Rect();
+    private final Rect reuseDstRect = new Rect();
+    private final Rect reuseCoordRect = new Rect();
+    private final XYCoord reuseCrdA = new XYCoord(0, 0);
+    private final XYCoord reuseCrdB = new XYCoord(0, 0);
+    private final XYCoord arrowCrd3 = new XYCoord(0, 0);
+    private final XYCoord arrowCrd4 = new XYCoord(0, 0);
+    private final XYCoord arrowCrd = new XYCoord(0, 0);
+    private final Paint suggestPaint = new Paint();
+    private final Paint historyPaint = new Paint();
+    private final ArrowShape arrowShape = new ArrowShape();
+    private final Path arrowPath = new Path();
+
 
     public ChessView(Context context, GameController controller) {
         super(context);
@@ -120,17 +142,17 @@ public class ChessView extends SurfaceView implements SurfaceHolder.Callback {
         showControllerState(canvas);
 
         // draw piece
-        Rect tempSrcRect, tempDesRect;
         for (int x = 0; x < Board.BOARD_PIECE_WIDTH; x++) {
             for (int y = 0; y < Board.BOARD_PIECE_HEIGHT; y++) {
-                Position pos = new Position(x, y);
-                int piece = board.getPieceByPosition(pos);
+                reusePos.x = x;
+                reusePos.y = y;
+                int piece = board.getPieceByPosition(reusePos);
                 if (Piece.isValid(piece)) {
                     // valid piece, draw the bitmap
                     Bitmap bitmap = PieceBitmaps[piece-1];
-                    tempSrcRect = new Rect(0, 0, bitmap.getWidth(), bitmap.getHeight());
-                    tempDesRect = getDestRect(pos);
-                    canvas.drawBitmap(bitmap, tempSrcRect, tempDesRect, null);
+                    fillSrcRect(bitmap, reuseSrcRect);
+                    fillDestRect(reusePos, reuseDstRect);
+                    canvas.drawBitmap(bitmap, reuseSrcRect, reuseDstRect, null);
                 }
             }
         }
@@ -143,16 +165,16 @@ public class ChessView extends SurfaceView implements SurfaceHolder.Callback {
             int piece = game.currentBoard.getPieceByPosition(game.startPos);
             // draw all possible moves
             if(Piece.isRed(piece)) {
-                tempSrcRect = new Rect(0, 0, R_pot.getWidth(), R_pot.getHeight());
+                fillSrcRect(R_pot, reuseSrcRect);
                 for (Position pos : game.possibleToPositions) {
-                    tempDesRect = getDestRect(pos);
-                    canvas.drawBitmap(R_pot, tempSrcRect, tempDesRect, null);
+                    fillDestRect(pos, reuseDstRect);
+                    canvas.drawBitmap(R_pot, reuseSrcRect, reuseDstRect, null);
                 }
             } else if(Piece.isBlack(piece)){
-                tempSrcRect = new Rect(0, 0, B_pot.getWidth(), B_pot.getHeight());
+                fillSrcRect(B_pot, reuseSrcRect);
                 for (Position pos : game.possibleToPositions) {
-                    tempDesRect = getDestRect(pos);
-                    canvas.drawBitmap(B_pot, tempSrcRect, tempDesRect, null);
+                    fillDestRect(pos, reuseDstRect);
+                    canvas.drawBitmap(B_pot, reuseSrcRect, reuseDstRect, null);
                 }
             }
         }
@@ -164,15 +186,14 @@ public class ChessView extends SurfaceView implements SurfaceHolder.Callback {
 
         // if there are suggested moves, show them on the board
         if(game.suggestedMoves.size() > 0) {
+            suggestPaint.setStyle(Paint.Style.FILL);
+            suggestPaint.setAntiAlias(true);
+            suggestPaint.setColor(Color.GREEN);
             for(int i = 0; i < game.suggestedMoves.size() && i < MAX_SUGGESTED_MOVES ; i++) {
                 Move move = game.suggestedMoves.get(i);
-                XYCoord crd0 = getCoordByPosition(move.fromPosition);
-                XYCoord crd1 = getCoordByPosition(move.toPosition);
-                Paint p = new Paint();
-                p.setStyle(Paint.Style.FILL);
-                p.setAntiAlias(true);
-                p.setColor(Color.GREEN);
-                DrawArrow(canvas, crd0, crd1, p, ChoiceBitmaps[i]);
+                fillCoord(move.fromPosition, reuseCrdA);
+                fillCoord(move.toPosition, reuseCrdB);
+                DrawArrow(canvas, reuseCrdA, reuseCrdB, suggestPaint, ChoiceBitmaps[i]);
             }
         }
     }
@@ -180,20 +201,19 @@ public class ChessView extends SurfaceView implements SurfaceHolder.Callback {
     private void showControllerState(Canvas canvas) {
         int targetSize = Scale(30);
         int xOffset = Scale(BOARD_GRID_INTERVAL * 4 + 45);
-        Rect tempDesRect = new Rect(destBoardRect.centerX() - targetSize + xOffset, destBoardRect.centerY() - targetSize,
+        reuseDstRect.set(destBoardRect.centerX() - targetSize + xOffset, destBoardRect.centerY() - targetSize,
                 destBoardRect.centerX() + targetSize + xOffset, destBoardRect.centerY() + targetSize);
         if (controller.isRedTurn()) {
             Bitmap bitmap = PieceBitmaps[0];
-            Rect tempSrcRect = new Rect(0, 0, bitmap.getWidth(), bitmap.getHeight());
-            canvas.drawBitmap(bitmap, tempSrcRect, tempDesRect, null);
+            fillSrcRect(bitmap, reuseSrcRect);
+            canvas.drawBitmap(bitmap, reuseSrcRect, reuseDstRect, null);
         } else if (controller.isBlackTurn()) {
             Bitmap bitmap = PieceBitmaps[7];
-            Rect tempSrcRect = new Rect(0, 0, bitmap.getWidth(), bitmap.getHeight());
-            canvas.drawBitmap(bitmap, tempSrcRect, tempDesRect, null);
+            fillSrcRect(bitmap, reuseSrcRect);
+            canvas.drawBitmap(bitmap, reuseSrcRect, reuseDstRect, null);
         } else {
-            Bitmap bitmap = ThinkBitmap;
-            Rect tempSrcRect = new Rect(0, 0, bitmap.getWidth(), bitmap.getHeight());
-            canvas.drawBitmap(bitmap, tempSrcRect, tempDesRect, null);
+            fillSrcRect(ThinkBitmap, reuseSrcRect);
+            canvas.drawBitmap(ThinkBitmap, reuseSrcRect, reuseDstRect, null);
         }
     }
 
@@ -201,30 +221,26 @@ public class ChessView extends SurfaceView implements SurfaceHolder.Callback {
         // draw selected piece
         Game game = controller.game;
         Board board = game.currentBoard;
-        Rect tempDesRect, tempSrcRect;
         Position pos = game.startPos;
         int piece = board.getPieceByPosition(pos);
         if (Piece.isValid(piece)) {
             // valid piece is selected
-            tempDesRect = getDestRect(pos);
+            fillDestRect(pos, reuseDstRect);
             if (Piece.isRed(piece)) {
-                tempSrcRect = new Rect(0, 0, R_box.getWidth(), R_box.getHeight());
-                canvas.drawBitmap(R_box, tempSrcRect, tempDesRect, null);
+                fillSrcRect(R_box, reuseSrcRect);
+                canvas.drawBitmap(R_box, reuseSrcRect, reuseDstRect, null);
             } else {
-                tempSrcRect = new Rect(0, 0, B_box.getWidth(), B_box.getHeight());
-                canvas.drawBitmap(B_box, tempSrcRect, tempDesRect, null);
+                fillSrcRect(B_box, reuseSrcRect);
+                canvas.drawBitmap(B_box, reuseSrcRect, reuseDstRect, null);
             }
         }
     }
 
     private void DrawMoveHistory(Canvas canvas) {
         Game game = controller.game;
-        Board board = game.currentBoard;
-        XYCoord crd0, crd1;
 
-        Paint p = new Paint();
-        p.setStyle(Paint.Style.FILL);
-        p.setAntiAlias(true);
+        historyPaint.setStyle(Paint.Style.FILL);
+        historyPaint.setAntiAlias(true);
 
         // draw arrow for the last several moves in historyMoves
         int num_of_history_moves = 2;
@@ -233,23 +249,23 @@ public class ChessView extends SurfaceView implements SurfaceHolder.Callback {
         }
         for(int i = game.history.size() - 1; i >= 0 && i >= game.history.size() - num_of_history_moves; i--) {
             Game.HistoryRecord record = game.history.get(i);
-            crd0 = getCoordByPosition(record.move.fromPosition);
-            crd1 = getCoordByPosition(record.move.toPosition);
+            fillCoord(record.move.fromPosition, reuseCrdA);
+            fillCoord(record.move.toPosition, reuseCrdB);
 
             // color
             if(Piece.isRed(record.move.piece)) {
-                p.setColor(Color.RED);
+                historyPaint.setColor(Color.RED);
             } else {
-                p.setColor(Color.BLACK);
+                historyPaint.setColor(Color.BLACK);
             }
 
             // calculate alpha value, the last move is the most opaque one
             int idx = (game.history.size() - 1 - i);
             int value = 220 - idx * 40;
             if(value < 0) value = 0;
-            p.setAlpha(value);
+            historyPaint.setAlpha(value);
 
-            DrawArrow(canvas, crd0, crd1, p, null);
+            DrawArrow(canvas, reuseCrdA, reuseCrdB, historyPaint, null);
         }
     }
 
@@ -257,10 +273,9 @@ public class ChessView extends SurfaceView implements SurfaceHolder.Callback {
         * 画箭头，并在箭头上显示bitmap。这个bitmap一般是数字，来标识箭头
      */
     void DrawArrow(Canvas canvas, XYCoord crd0, XYCoord crd1, Paint p, Bitmap bitmap) {
-        ArrowShape arrow = new ArrowShape();
-        Path path = new Path();
-        arrow.getTransformedPath(path, crd0.x, crd0.y, crd1.x, crd1.y);
-        canvas.drawPath(path, p);
+        arrowPath.reset();
+        arrowShape.getTransformedPath(arrowPath, crd0.x, crd0.y, crd1.x, crd1.y);
+        canvas.drawPath(arrowPath, p);
 
         if(bitmap != null) {
             int offset_to_endpos = 80;
@@ -268,29 +283,29 @@ public class ChessView extends SurfaceView implements SurfaceHolder.Callback {
             // 找到合适的位置，然后在那个位置画bitmap
 
             // 离crd1 offset_to_endpos个像素的位置
-            XYCoord crd3 = new XYCoord(0, 0);
             int dx = crd1.x - crd0.x;
             int dy = crd1.y - crd0.y;
             int d = (int)Math.sqrt(dx*dx + dy*dy);
-            crd3.x = crd1.x - offset_to_endpos * dx / d;
-            crd3.y = crd1.y - offset_to_endpos * dy / d;
+            arrowCrd3.x = crd1.x - offset_to_endpos * dx / d;
+            arrowCrd3.y = crd1.y - offset_to_endpos * dy / d;
 
             // 两者之间3/5的位置
-            XYCoord crd4 = new XYCoord((crd0.x*2 + crd1.x*3) / 5, (crd0.y*2 + crd1.y*3) / 5);
+            arrowCrd4.x = (crd0.x*2 + crd1.x*3) / 5;
+            arrowCrd4.y = (crd0.y*2 + crd1.y*3) / 5;
 
             // 取离crd1最近的点, 防止箭头太长时，数字离箭头太远
-            int d3 = (crd3.x - crd1.x) * (crd3.x - crd1.x) + (crd3.y - crd1.y) * (crd3.y - crd1.y);
-            int d4 = (crd4.x - crd1.x) * (crd4.x - crd1.x) + (crd4.y - crd1.y) * (crd4.y - crd1.y);
-            XYCoord crd = d3 < d4 ? crd3 : crd4;
+            int d3 = (arrowCrd3.x - crd1.x) * (arrowCrd3.x - crd1.x) + (arrowCrd3.y - crd1.y) * (arrowCrd3.y - crd1.y);
+            int d4 = (arrowCrd4.x - crd1.x) * (arrowCrd4.x - crd1.x) + (arrowCrd4.y - crd1.y) * (arrowCrd4.y - crd1.y);
+            XYCoord crd = d3 < d4 ? arrowCrd3 : arrowCrd4;
 
             // draw bitmap to crd position
             int sx = bitmap.getWidth();
             int sy = bitmap.getHeight();
             int nx = width_of_bitmap / 2;
             int ny = nx * sy / sx / 2;
-            Rect tempSrcRect = new Rect(0, 0, sx, sy);
-            Rect tempDesRect = new Rect(crd.x - nx, crd.y - ny, crd.x + nx, crd.y + ny);
-            canvas.drawBitmap(bitmap, tempSrcRect, tempDesRect, null);
+            fillSrcRect(bitmap, reuseSrcRect);
+            reuseDstRect.set(crd.x - nx, crd.y - ny, crd.x + nx, crd.y + ny);
+            canvas.drawBitmap(bitmap, reuseSrcRect, reuseDstRect, null);
         }
     }
 
@@ -298,13 +313,32 @@ public class ChessView extends SurfaceView implements SurfaceHolder.Callback {
         return (int)(x * scaleRatio);
     }
 
-        @NonNull
-    private Rect getDestRect(Position pos) {
-        return new Rect(
+    @NonNull
+    private Rect fillDestRect(Position pos, Rect out) {
+        out.set(
                 Scale(pos.x * BOARD_GRID_INTERVAL + BOARD_X_OFFSET),
                 Scale(pos.y * BOARD_GRID_INTERVAL + BOARD_Y_OFFSET),
                 Scale(pos.x * BOARD_GRID_INTERVAL + BOARD_X_OFFSET + BOARD_PIECE_SIZE),
                 Scale(pos.y * BOARD_GRID_INTERVAL + BOARD_Y_OFFSET + BOARD_PIECE_SIZE));
+        return out;
+    }
+
+    @NonNull
+    private Rect getDestRect(Position pos) {
+        return fillDestRect(pos, new Rect());
+    }
+
+    /** 用位图整幅图像填充 src rect（复用调用方的 Rect，热路径免分配） */
+    private static Rect fillSrcRect(Bitmap bitmap, Rect out) {
+        out.set(0, 0, bitmap.getWidth(), bitmap.getHeight());
+        return out;
+    }
+
+    /** 棋盘格中心坐标填入复用的 XYCoord（热路径免分配） */
+    private void fillCoord(Position pos, XYCoord out) {
+        Rect r = fillDestRect(pos, reuseCoordRect);
+        out.x = r.centerX();
+        out.y = r.centerY();
     }
 
 
@@ -332,12 +366,42 @@ public class ChessView extends SurfaceView implements SurfaceHolder.Callback {
     }
 
     public void surfaceCreated(SurfaceHolder holder) {
+        // 先停掉可能残留的旧线程（正常路径 surfaceDestroyed 已停；防御回调次序异常导致线程叠加）
+        stopRenderThread();
         this.thread = new ChessViewThread(getHolder());
         this.thread.start();
     }
 
     public void surfaceDestroyed(SurfaceHolder holder) {
+        // Surface 已销毁必须停线程：修复"每次 surface 重建泄漏一个 10fps 自旋线程"（根因 2）
+        stopRenderThread();
+    }
 
+    /** 停掉当前刷帧线程：置退出标志并唤醒（可能正 wait），join 等其退出（含最后一帧的画布释放） */
+    private void stopRenderThread() {
+        ChessViewThread t = this.thread;
+        this.thread = null;
+        if (t == null) return;
+        t.running = false;
+        synchronized (renderLock) {
+            renderLock.notifyAll();
+        }
+        try {
+            t.join(1000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    /**
+     * 事件驱动重绘入口：局面/选中/高亮/箭头等棋盘状态变化后由 UI 调用。
+     * 脏标志置位并唤醒刷帧线程；线程无脏标志时不 lockCanvas 不绘制（静止时零重绘，根因 1）。
+     */
+    public void requestRender() {
+        synchronized (renderLock) {
+            renderDirty = true;
+            renderLock.notifyAll();
+        }
     }
 
     public Position getPosByCoord(float x, float y) {
@@ -360,7 +424,11 @@ public class ChessView extends SurfaceView implements SurfaceHolder.Callback {
 
     class ChessViewThread extends Thread {
         //刷帧线程
-        public int span = 100;//睡眠100毫秒数
+        public int span = 100;//相邻两帧最小间隔（毫秒），事件风暴下的绘制节奏上限
+        /** 无脏标志时的兜底自检周期：只醒来检查脏标志，不 lockCanvas 不绘制（静止时零重绘） */
+        private static final long IDLE_WAIT_MS = 500;
+        /** 退出标志：surface 销毁（stopRenderThread）置 false，run() 循环检测后结束（根因 1/2） */
+        public volatile boolean running = true;
         public SurfaceHolder surfaceHolder;
 
         public ChessViewThread(SurfaceHolder surfaceHolder) {
@@ -368,19 +436,38 @@ public class ChessView extends SurfaceView implements SurfaceHolder.Callback {
         }
 
         public void run() {//重写的方法
-            Canvas c;//画布
-            while (true) {//循环绘制
-                c = this.surfaceHolder.lockCanvas();
-                try {
-                    Draw(c);//绘制方法
-                } catch (Exception e) {
-                    e.printStackTrace();//输出异常堆栈信息
+            while (running) {
+                // 无脏标志时休眠等待 requestRender 唤醒；IDLE_WAIT_MS 兜底自检防漏单
+                synchronized (renderLock) {
+                    while (running && !renderDirty) {
+                        try {
+                            renderLock.wait(IDLE_WAIT_MS);
+                        } catch (InterruptedException e) {
+                            return;// 中断即退出（surface 销毁路径）
+                        }
+                    }
+                    if (!running) return;
+                    renderDirty = false;
                 }
-                if (c != null) this.surfaceHolder.unlockCanvasAndPost(c);
+                Canvas c = null;//画布
                 try {
-                    Thread.sleep(span);//睡眠时间，单位是毫秒
+                    c = this.surfaceHolder.lockCanvas();
+                    if (c != null) Draw(c);//绘制方法
                 } catch (Exception e) {
                     e.printStackTrace();//输出异常堆栈信息
+                } finally {
+                    if (c != null) {
+                        try {
+                            this.surfaceHolder.unlockCanvasAndPost(c);
+                        } catch (Exception e) {
+                            e.printStackTrace();// surface 销毁竞态下可能失败，忽略
+                        }
+                    }
+                }
+                try {
+                    Thread.sleep(span);//保持原绘制节奏下限
+                } catch (Exception e) {
+                    return;// 中断即退出
                 }
             }
         }

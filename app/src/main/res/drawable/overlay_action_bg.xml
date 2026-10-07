@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 悬浮窗动作按钮（更新/关闭、变招/悔棋/手动）：1dp 描边 + 半透明底。
+     运行时底由 OverlayTheme.actionBackground() 按主题注入 -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_pressed="true">
+        <shape android:shape="rectangle">
+            <corners android:radius="6dp" />
+            <solid android:color="@color/qi_line2" />
+            <stroke
+                android:width="1dp"
+                android:color="@color/qi_line3" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="6dp" />
+            <solid android:color="@color/qi_line1" />
+            <stroke
+                android:width="1dp"
+                android:color="@color/qi_line2" />
+        </shape>
+    </item>
+</selector>

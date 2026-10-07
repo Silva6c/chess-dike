@@ -42,7 +42,7 @@ android {
         minSdk = 26
         targetSdk = 33
         versionCode = gitVersion()
-        versionName = "2.5"
+        versionName = "2.9"
 
         ndk {
             abiFilters += listOf("arm64-v8a", "x86_64")
@@ -149,8 +149,10 @@ tasks.named("preBuild") {
 dependencies {
     // https://withme.skullzbones.com/blog/programming/execute-native-binaries-android-q-no-root/
     implementation(files("$buildDir/native-libs/native-libs.jar"))
-    // YOLOv5 棋子检测推理（fp16 模型在 assets/yolov5s_xq_fp16.tflite）
+    // YOLOv5 棋子检测推理（fp16 模型在 assets/yolov5s_xq_fp16.tflite，回退引擎）
     implementation("org.tensorflow:tensorflow-lite:2.14.0")
+    // ONNX 两步式识别推理（RTMPose 角点 + Swin 分类，主力引擎；模型见 assets/models/README.md）
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.17.1")
     implementation("com.readystatesoftware.sqliteasset:sqliteassethelper:+")
     // https://mvnrepository.com/artifact/com.igormaznitsa/jbbp
     implementation("com.igormaznitsa:jbbp:3.0.0")

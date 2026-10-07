@@ -394,6 +394,10 @@ class ManualActivity() : AppCompatActivity(), ControllerListener,
                 binding.textViewNote.text = controller.moveNode.move.comment
             }
         }
+
+        // 棋盘重绘改事件驱动（根因 1）：所有控制器状态变化统一在这里请求重绘，
+        // ChessView 无脏标志时不再无条件刷帧
+        chessView.requestRender()
     }
 
     // to pre-process all manuals in external_storage/xqf

@@ -5,7 +5,7 @@
     android:id="@+id/main"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/chessbg"
+    android:background="@color/qi_ink"
     tools:context=".MainActivity">
 
 
@@ -19,11 +19,11 @@
 
         <Button
             android:id="@+id/button_play"
+            style="@style/HomeButton.Primary"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_height="48dp"
             android:layout_marginVertical="10dp"
             android:text="对弈"
-            android:textSize="20dp"
             app:layout_constraintBottom_toTopOf="@+id/button_link"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
@@ -31,11 +31,11 @@
 
         <Button
             android:id="@+id/button_link"
+            style="@style/HomeButton.Primary"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_height="48dp"
             android:layout_marginVertical="10dp"
             android:text="连线"
-            android:textSize="20dp"
             app:layout_constraintBottom_toTopOf="@+id/button_learn"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
@@ -43,11 +43,11 @@
 
         <Button
             android:id="@+id/button_learn"
+            style="@style/HomeButton.Primary"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_height="48dp"
             android:layout_marginVertical="10dp"
             android:text="打谱"
-            android:textSize="20dp"
             app:layout_constraintBottom_toTopOf="@+id/button_help"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
@@ -55,11 +55,11 @@
 
         <Button
             android:id="@+id/button_help"
+            style="@style/HomeButton.Secondary"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_height="48dp"
             android:layout_marginVertical="10dp"
             android:text="帮助"
-            android:textSize="20dp"
             app:layout_constraintBottom_toTopOf="@+id/button_about"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
@@ -67,11 +67,11 @@
 
         <Button
             android:id="@+id/button_about"
+            style="@style/HomeButton.Secondary"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_height="48dp"
             android:layout_marginVertical="10dp"
             android:text="关于"
-            android:textSize="20dp"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"

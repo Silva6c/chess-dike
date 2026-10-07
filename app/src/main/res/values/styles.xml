@@ -1,22 +1,83 @@
 <resources>
 
-    <style name="Widget.Theme.ChineseChess.ActionBar.Fullscreen" parent="Widget.AppCompat.ActionBar">
-        <item name="android:background">@color/black_overlay</item>
+
+
+    <!-- ==== 主页按钮样式（对齐 Cabinet home_btn_*）==== -->
+
+    <!-- 主页主按钮（对弈/连线/打谱）：朱砂实底 selector，白字 15sp 粗体，48dp 高 -->
+    <style name="HomeButton.Primary" parent="">
+        <item name="android:background">@drawable/home_btn_primary</item>
+        <item name="android:textColor">@color/white</item>
+        <item name="android:textSize">15sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:minHeight">48dp</item>
+        <item name="android:gravity">center</item>
     </style>
 
-    <style name="Widget.Theme.ChineseChess.ButtonBar.Fullscreen" parent="">
-        <item name="android:background">@color/black_overlay</item>
-        <item name="android:buttonBarStyle">?android:attr/buttonBarStyle</item>
+    <!-- 主页次按钮（帮助/关于）：半透明底 + 1dp 描边，墨底上用象牙白文字 -->
+    <style name="HomeButton.Secondary" parent="">
+        <item name="android:background">@drawable/home_btn_secondary</item>
+        <item name="android:textColor">@color/qi_ivory</item>
+        <item name="android:textSize">15sp</item>
+        <item name="android:minHeight">48dp</item>
+        <item name="android:gravity">center</item>
     </style>
 
-    <style name="OverlayButton">
-        <item name="android:layout_width">wrap_content</item>
-        <item name="android:layout_height">wrap_content</item>
-        <item name="android:background">@drawable/overlay_button_bg</item>
-        <item name="android:paddingHorizontal">7dp</item>
-        <item name="android:paddingVertical">3dp</item>
-        <item name="android:layout_marginHorizontal">4dp</item>
-        <item name="android:textColor">#FFFFFF</item>
+    <!-- ==== 悬浮窗样式（对齐 Cabinet overlay_panel 三列布局）==== -->
+
+    <!-- 状态行小字（● 运行中 · 用时）：次级灰 -->
+    <style name="OverlayState">
+        <item name="android:textSize">11sp</item>
+        <item name="android:textColor">@color/qi_muted</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:ellipsize">end</item>
+    </style>
+
+    <!-- 主状态大字（一眼原则：轮到我方走 / 已停止指导 / 引擎异常…）；
+         14sp：最长文案在 114dp 左列不顶满不贴边 -->
+    <style name="OverlayHeadline">
+        <item name="android:textSize">14sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/qi_amber_text</item>
+        <item name="android:maxLines">2</item>
+        <item name="android:ellipsize">end</item>
+    </style>
+
+    <!-- 优势行：红方优势 +0.8（等宽数字） -->
+    <style name="OverlayAdvantage">
         <item name="android:textSize">12sp</item>
+        <item name="android:fontFeatureSettings">tnum</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:ellipsize">end</item>
+    </style>
+
+    <!-- 候选/预案行：建议 炮二平五 ✓（点阵折进尾部，见 OverlayPanelView） -->
+    <style name="OverlayCandidate">
+        <item name="android:textSize">12sp</item>
+        <item name="android:maxLines">2</item>
+        <item name="android:ellipsize">end</item>
+    </style>
+
+    <!-- 值芯片（深度/哈希）：无描边、弱底、左对齐 -->
+    <style name="OverlayChip">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">23dp</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:paddingLeft">2dp</item>
+        <item name="android:paddingRight">2dp</item>
+        <item name="android:background">@drawable/overlay_chip_bg</item>
+        <item name="android:textSize">11sp</item>
+        <item name="android:textColor">@color/qi_muted</item>
+        <item name="android:maxLines">1</item>
+    </style>
+
+    <!-- 动作按钮（更新/停止/关闭、变招/悔棋/手动）：1dp 描边，底由主题运行时注入 -->
+    <style name="OverlayAction">
+        <item name="android:background">@drawable/overlay_action_bg</item>
+        <item name="android:textColor">@color/qi_ivory</item>
+        <item name="android:textSize">11sp</item>
+        <item name="android:gravity">center</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:paddingHorizontal">2dp</item>
     </style>
 </resources>

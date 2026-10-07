@@ -1,12 +1,9 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Base application theme. -->
     <style name="Base.Theme.ChineseChess" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize your dark theme here. -->
-        <!-- <item name="colorPrimary">@color/my_dark_primary</item> -->
+        <!-- 朱砂主色（对齐 Cabinet）：覆盖 M3 默认紫，与日间主题一致 -->
+        <item name="colorPrimary">@color/qi_zhu_btn</item>
+        <item name="colorAccent">@color/qi_zhu_btn</item>
     </style>
 
-    <style name="ThemeOverlay.ChineseChess.FullscreenContainer" parent="">
-        <item name="fullscreenBackgroundColor">@color/light_blue_900</item>
-        <item name="fullscreenTextColor">@color/light_blue_A400</item>
-    </style>
 </resources>

@@ -5,14 +5,18 @@
 象棋迪克是一个开源免费的安卓版中国象棋学习工具：内置 Pikafish 引擎的完整对弈与打谱，
 以及基于 YOLO 屏幕识别的"连线"功能（识别其他象棋 App 局面并在悬浮窗给出走法建议）。
 
-**免责声明**：本应用仅供个人学习、研究与文化交流使用，严禁用于商业用途或任何违反法律法规、
-游戏平台规则的情形；请于获取后 **24 小时内自行删除**。
+**免责声明**：本软件（象棋迪克）为象棋学习辅助工具，仅供个人学习、复盘研究与技术交流使用。
+仅通过系统录屏授权识别画面并以悬浮窗显示走法建议，不包含自动走子、触摸注入、无障碍服务等功能；
+**严禁用于任何正式比赛、等级分对局、网络对局平台或赌博等违反平台规则与法律法规的场景**；
+请于获取后 **24 小时内自行删除**。详见应用内免责声明全文。
 
 ## 鸣谢
 
 - 原项目"象棋鱼"（作者 zfdang，[GitHub](https://github.com/zfdang/chinese-chess-android)）——
   本项目在其基础上二次开发；
-- [VinXiangQi](https://github.com/Vincentzyx/VinXiangQi) —— YOLO 棋子检测权重文件来源；
+- [Vincentzyx/VinXiangQi](https://github.com/Vincentzyx/VinXiangQi) —— YOLO 棋子检测权重文件来源（GPL-3.0）；
+- [Shirakawa-Kotone/chinese-chess-helper](https://github.com/Shirakawa-Kotone/chinese-chess-helper) ——
+  ONNX 两步式识别引擎（RTMPose 角点 + Swin 分类）的模型与算法来源；
 - [Pikafish](https://github.com/official-pikafish/Pikafish) 引擎团队与
   [DroidFish](https://github.com/peterosterlund2/droidfish)（Peter Österlund）—— 引擎与对弈框架基座（GPL-3.0）。
 
@@ -46,6 +50,7 @@
 | Pikafish 引擎（`libpikafish-armv8.so` / `-dotprod.so`，GPL-3.0） | ✅ 分发 | ✅ 内置 | `app/src/main/pikafish/arm64-v8a/` |
 | Pikafish NNUE 权重（`libpikafish.nnue.so`，GPL-3.0） | ✅ 分发 | ✅ 内置 | 同上，约 45MB |
 | YOLO 棋子检测模型（`assets/yolov5n_xq_fp16.tflite`） | ✅ 分发 | ✅ 内置 | 权重来自 VinXiangQi |
+| **ONNX 识别模型**（`assets/models/*.onnx`，共约 21.5MB） | ❌ `.gitignore` 排除 | 需自行放置 | 两步式识别引擎（RTMPose 角点 + Swin 分类，来自 chinese-chess-helper）；未放置时自动回退 YOLO，见 `assets/models/README.md` |
 | **桔库开局库**（`assets/databases/*.obk.zip`） | ❌ `.gitignore` 排除 | ✅ 内置 | 第三方版权内容不入 git；缺失时对弈/连线**自动降级为纯引擎模式**，不影响使用 |
 | 内置棋谱书（`assets/XQF/`） | ❌ `.gitignore` 排除（仅留说明） | ✅ 内置 | 第三方版权内容；克隆者可自行导入 `.xqf` / `.pgn` |
 

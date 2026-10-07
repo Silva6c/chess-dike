@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 背景（默认墨底+细网格）由 AssistActivity 在代码中应用 QiGridDrawable，
+     XML 兜底 qi_ink 纯色防闪 -->
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/bg_scroll"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/chessbg"
+    android:background="@color/qi_ink"
     android:fillViewport="true">
 
     <LinearLayout
@@ -68,6 +71,41 @@
             android:layout_height="wrap_content"
             android:text="③ 开始屏幕识别（全自动识别棋盘）"
             android:textSize="15sp" />
+
+        <Button
+            android:id="@+id/btn_overlay_theme"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="④ 悬浮窗主题：深色玻璃"
+            android:textSize="15sp" />
+
+        <!-- 切换识别模型（引擎）：页面是固定墨底，但主题是 DayNight——浅色系统模式下
+             RadioButton 默认 onSurface 深色文字/深色圈落在墨底上不可读（背景导致字体
+             识别不良），故字体固定白色、选中圈固定朱砂（qi_zhu 在墨底 4.5:1） -->
+        <RadioGroup
+            android:id="@+id/rg_recognizer_engine"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <RadioButton
+                android:id="@+id/rb_engine_onnx"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:buttonTint="@color/qi_zhu"
+                android:text="⑤ 识别引擎：ONNX 角点式（默认，泛化好）"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp" />
+
+            <RadioButton
+                android:id="@+id/rb_engine_yolo"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:buttonTint="@color/qi_zhu"
+                android:text="⑤ 识别引擎：YOLO 检测式（回退）"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp" />
+        </RadioGroup>
 
         <TextView
             android:layout_width="match_parent"

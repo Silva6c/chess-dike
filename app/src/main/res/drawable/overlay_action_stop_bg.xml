@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 悬浮窗"停止"按钮：琥珀警示描边（唯一带语义描边的动作按钮） -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_pressed="true">
+        <shape android:shape="rectangle">
+            <corners android:radius="6dp" />
+            <solid android:color="#26FFC107" />
+            <stroke
+                android:width="1dp"
+                android:color="@color/qi_amber" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="6dp" />
+            <solid android:color="@color/qi_line1" />
+            <stroke
+                android:width="1dp"
+                android:color="#B3FFC107" />
+        </shape>
+    </item>
+</selector>

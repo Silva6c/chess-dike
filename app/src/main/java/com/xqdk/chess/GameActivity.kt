@@ -161,6 +161,9 @@ class GameActivity() : AppCompatActivity(), View.OnTouchListener, ControllerList
                 return false
             }
             controller.touchPosition(pos);
+            // 选中/取消选中/走子都会经 controller 发 GameStatus 事件再到 onGameEvent 重绘；
+            // 这里兜底请求一次（点到已选中格等边界路径）
+            chessView.requestRender()
             Log.d("PlayActivity", "onTouch: x = $x, y = $y, pos = " + pos.toString())
         }
         return false
@@ -169,6 +172,13 @@ class GameActivity() : AppCompatActivity(), View.OnTouchListener, ControllerList
     // create function to set status text
     fun setStatusText(text: String) {
         binding.statustv.text = text
+    }
+
+    /** 隐藏 MultiPV 候选三按钮（收敛四处三连 visibility 赋值，根因 7） */
+    private fun hideAllChoiceBts() {
+        binding.choice1bt.visibility = View.GONE
+        binding.choice2bt.visibility = View.GONE
+        binding.choice3bt.visibility = View.GONE
     }
 
     fun showNewGameConfirmDialog() {
@@ -187,9 +197,7 @@ class GameActivity() : AppCompatActivity(), View.OnTouchListener, ControllerList
             }
             // hide choice buttons
             if(binding.choice1bt.visibility == View.VISIBLE){
-                binding.choice1bt.visibility = View.GONE;
-                binding.choice2bt.visibility = View.GONE;
-                binding.choice3bt.visibility = View.GONE;
+                hideAllChoiceBts()
             }
 
             Handler(Looper.getMainLooper()).postDelayed({
@@ -351,23 +359,17 @@ class GameActivity() : AppCompatActivity(), View.OnTouchListener, ControllerList
             }
             binding.choice1bt -> {
                 setStatusText("选择着数1")
-                binding.choice1bt.visibility = View.GONE;
-                binding.choice2bt.visibility = View.GONE;
-                binding.choice3bt.visibility = View.GONE;
+                hideAllChoiceBts()
                 controller.selectMultiPV(0)
             }
             binding.choice2bt -> {
                 setStatusText("选择着数2")
-                binding.choice1bt.visibility = View.GONE;
-                binding.choice2bt.visibility = View.GONE;
-                binding.choice3bt.visibility = View.GONE;
+                hideAllChoiceBts()
                 controller.selectMultiPV(1)
             }
             binding.choice3bt -> {
                 setStatusText("选择着数3")
-                binding.choice1bt.visibility = View.GONE;
-                binding.choice2bt.visibility = View.GONE;
-                binding.choice3bt.visibility = View.GONE;
+                hideAllChoiceBts()
                 controller.selectMultiPV(2)
             }
         }
@@ -386,9 +388,7 @@ class GameActivity() : AppCompatActivity(), View.OnTouchListener, ControllerList
                 soundPlayer.move();
 
                 if(binding.choice1bt.visibility == View.VISIBLE){
-                    binding.choice1bt.visibility = View.GONE;
-                    binding.choice2bt.visibility = View.GONE;
-                    binding.choice3bt.visibility = View.GONE;
+                    hideAllChoiceBts()
                 }
             }
             GameStatus.CAPTURE -> {
@@ -437,6 +437,9 @@ class GameActivity() : AppCompatActivity(), View.OnTouchListener, ControllerList
 
         // update history table
         historyAndTrendAdapter.update()
+        // 棋盘重绘改事件驱动（根因 1）：所有控制器状态变化（走子/选子/引擎事件等 12 种）
+        // 都经此回调，统一在这里请求重绘；ChessView 无脏标志时不再无条件刷帧
+        chessView.requestRender()
     }
 
     // create fun to handle onbackpressed

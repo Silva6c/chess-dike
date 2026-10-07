@@ -1,6 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
-<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-    <solid android:color="#E61B1E24" />
-    <corners android:radius="18dp" />
-    <stroke android:width="1dp" android:color="#66FFC107" />
-</shape>
+<!-- 悬浮窗面板背景（XML 兜底；运行期由 OverlayTheme.background() 按主题重绘，
+     真背景层是 XML 内子 View overlay_bg_layer——root 自身 background 运行期替换不生效）：
+     玻璃底 72% + 上沿描边 + 顶部微渐变（前 50% 渐隐），圆角 20dp -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="@dimen/qi_r_xl" />
+            <solid android:color="@color/qi_glass" />
+            <stroke
+                android:width="1dp"
+                android:color="#24FFFFFF" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="@dimen/qi_r_xl" />
+            <gradient
+                android:angle="270"
+                android:centerY="0.42"
+                android:endColor="#00FFFFFF"
+                android:startColor="#12FFFFFF"
+                android:type="linear" />
+        </shape>
+    </item>
+</layer-list>

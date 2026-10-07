@@ -46,3 +46,16 @@ app/src/main/assets/databases/
 # 内置棋谱书（第三方版权内容；打谱页可自行导入 .xqf/.pgn）
 app/src/main/assets/XQF/**
 !app/src/main/assets/XQF/README.txt
+
+# ==== 与上游同步的"不入公开仓库"规则 ====
+# ONNX 识别模型（体积大不入库；使用前自行放置，见 assets/models/README.md）
+app/src/main/assets/models/*.onnx
+
+# 任务书（内部 prompt 文件）不入公开仓库
+docs/*prompt.md
+
+# 工程交接文档（内部工作文件）不入公开仓库；本地保留维护
+docs/engineer-handoff.md
+
+# 本地备份目录（G 盘删除前的完整备份），绝不入公开仓库
+G-backup/
