@@ -109,7 +109,27 @@ object DetectionBoardMapper {
             if (pieceCount > 0) scoreSum / pieceCount else 0.0, dropped)
     }
 
-    /** 双王位置判定屏幕朝向（帅在下=STANDARD，独立实现保持纯 JVM 无耦合） */
+    /**
+     * 屏幕朝向几何判定（ONNX 管线专用）：红方所在 raw 行对应 warp 顶/底边，
+     * 比较两条边在原图坐标系的 y——红方边原图 y 更大即红在屏幕下方（STANDARD）。
+     *
+     * 背景（2026-10-01 模拟器实测）：RTMPose 全图定位的角点身份可能整体漂移，
+     * 令 warp 把棋盘采成旋转 180° 的俯视图；此时 detectOrientation（双王行位）
+     * 只反映 warp 内部朝向，不反映屏幕朝向。本函数与内容判定联合：红方在 raw
+     * 的行由 contentOrient 推出（STANDARD=第 9 行 / FLIPPED=第 0 行），该行映射
+     * warp 底边（corners[2..3]）或顶边（corners[0..1]），再回原图比 y——
+     * 无论 warp 是否旋转、无论 pose 用何种角点语义，结果恒为真实屏幕朝向。
+     * 逐帧无状态（下一帧是什么就识别什么）；假设棋盘竖放（高>宽，横屏不支持）。
+     */
+    fun screenOrientation(corners: FloatArray, contentOrient: Orientation): Orientation {
+        val topEdgeY = (corners[1] + corners[3]) / 2f    // warp 顶边两角 y 平均
+        val bottomEdgeY = (corners[5] + corners[7]) / 2f // warp 底边两角 y 平均
+        val redEdgeY = if (contentOrient == Orientation.STANDARD) bottomEdgeY else topEdgeY
+        val blackEdgeY = if (contentOrient == Orientation.STANDARD) topEdgeY else bottomEdgeY
+        return if (redEdgeY > blackEdgeY) Orientation.STANDARD else Orientation.FLIPPED
+    }
+
+    /** 双王位置判定 warp 内容朝向（帅在 raw 下半=STANDARD，独立实现保持纯 JVM 无耦合） */
     fun detectOrientation(raw: Array<IntArray>): Orientation? {
         var redRow = -1
         var blackRow = -1

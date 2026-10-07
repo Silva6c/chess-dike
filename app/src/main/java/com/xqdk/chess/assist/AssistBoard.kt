@@ -106,28 +106,45 @@ object AssistBoard {
 
     /**
      * 推断"刚走子的一方"：对比旧/新局面。返回红(1)、黑(0)或 null(无法确定)。
-     * 规则：新增棋子（目标格）所属阵营即移动方；无新增（重排/异常）则尝试用移除方补。
+     * 规则：只看"哪里多了子"——新增棋子（目标格）所属阵营即移动方。吃子步必然
+     * 同时移除两色棋子（移动方起点子 + 被吃方子），旧逻辑把"移除双色"当异常返回
+     * null，走子方就此卡在旧值（是否触发还取决于格子遍历顺序，纯运气）。移除情况
+     * 现完全不影响判定，仅红黑同时新增（识别噪声）或全无新增（目标格新子被误识别
+     * 为空）才放弃/保守兜底。
+     *
+     * 同色换型不是走子证据：真实走子的目标格必然"空→有子"或"变色（吃子）"——
+     * 己方子吃不到己方子上；同色值变（炮→马）只能是识别误读。此前它被算作该色
+     * "新增"，与真实走子方的"新增"冲突返回 null，轮次卡旧值→悬浮窗一直显示
+     * "轮到对方走"且无箭头。移除兜底同理只数"真移除"（有子→空）。
      */
     fun movedSide(old: Array<IntArray>, new: Array<IntArray>): Int? {
         var addedSide: Int? = null
-        var removedSide: Int? = null
         for (y in 0 until H) for (x in 0 until W) {
             val o = old[y][x]
             val n = new[y][x]
-            if (o == n) continue
-            if (n != Piece.EMPTY) {
-                val s = if (Piece.isRed(n)) 1 else 0
-                if (addedSide != null && addedSide != s) return null
-                addedSide = s
-            }
-            if (o != Piece.EMPTY) {
-                val s = if (Piece.isRed(o)) 1 else 0
-                if (removedSide != null && removedSide != s) return null
-                removedSide = s
-            }
+            if (n == Piece.EMPTY || n == o) continue
+            if (o != Piece.EMPTY && Piece.isRed(o) == Piece.isRed(n)) continue
+            val s = if (Piece.isRed(n)) 1 else 0
+            if (addedSide != null && addedSide != s) return null
+            addedSide = s
         }
-        return addedSide ?: removedSide
+        if (addedSide != null) return addedSide
+        // 无新增子兜底：只数"真移除"（有子→空）。单色真移除按移除方补判，
+        // 双色真移除无法定位移动方，放弃（保守卡旧值，交给下一手自愈）
+        var removedSide: Int? = null
+        for (y in 0 until H) for (x in 0 until W) {
+            val o = old[y][x]
+            if (o == Piece.EMPTY || new[y][x] != Piece.EMPTY) continue
+            val s = if (Piece.isRed(o)) 1 else 0
+            if (removedSide != null && removedSide != s) return null
+            removedSide = s
+        }
+        return removedSide
     }
+
+    /** 各棋子类型的数量上限（piece 值 → 上限；validate 每次识别都调，Map 提为常量免重复构建+装箱） */
+    private val PIECE_LIMITS = mapOf(
+        2 to 2, 3 to 2, 4 to 2, 5 to 2, 6 to 2, 7 to 5, 9 to 2, 10 to 2, 11 to 2, 12 to 2, 13 to 2, 14 to 5)
 
     /** 硬合法性校验：每个阵营的棋子数量必须在合法范围内，帅/将各一。返回问题列表，空表示通过 */
     fun validate(pieces: Array<IntArray>): List<String> {
@@ -139,13 +156,31 @@ object AssistBoard {
         }
         if (counts[Piece.WSHUAI] != 1) issues.add("红帅数量异常:${counts[Piece.WSHUAI]}")
         if (counts[Piece.BJIANG] != 1) issues.add("黑将数量异常:${counts[Piece.BJIANG]}")
-        val limits = mapOf(2 to 2, 3 to 2, 4 to 2, 5 to 2, 6 to 2, 7 to 5, 9 to 2, 10 to 2, 11 to 2, 12 to 2, 13 to 2, 14 to 5)
-        for ((k, v) in limits) {
+        for ((k, v) in PIECE_LIMITS) {
             if (counts[k] > v) issues.add("${Piece.getNameByValue(k)}数量超限:${counts[k]}")
         }
         var total = 0
         for (c in counts) total += c
         if (total > 32) issues.add("总子数超限:$total")
+        // 两将(帅)照面:同列且中间无子——象棋根本规则。误识别常产出此类非法局面
+        // (如把主菜单按钮认成将/帅),此前只被上游校验拒收,本地却已确认,
+        // 状态栏反而报异常。本地先拦,让 tracker 走不稳定自愈。
+        if (counts[Piece.WSHUAI] == 1 && counts[Piece.BJIANG] == 1) {
+            var rx = -1; var ry = -1; var bx = -1; var by = -1
+            for (y in 0 until H) for (x in 0 until W) {
+                when (pieces[y][x]) {
+                    Piece.WSHUAI -> { rx = x; ry = y }
+                    Piece.BJIANG -> { bx = x; by = y }
+                }
+            }
+            if (rx == bx) {
+                var blocked = false
+                for (y in minOf(ry, by) + 1 until maxOf(ry, by)) {
+                    if (pieces[y][rx] != Piece.EMPTY) { blocked = true; break }
+                }
+                if (!blocked) issues.add("两将照面(同列 $rx 无隔子)")
+            }
+        }
         return issues
     }
 

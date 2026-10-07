@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 悬浮窗值芯片（深度/哈希）：无描边、6% 白底、6dp 圆角——与动作按钮两级分权。
+     运行时底由 OverlayTheme.chipBackground() 按主题注入 -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_pressed="true">
+        <shape android:shape="rectangle">
+            <corners android:radius="6dp" />
+            <solid android:color="#1CFFFFFF" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="6dp" />
+            <solid android:color="#0FFFFFFF" />
+        </shape>
+    </item>
+</selector>

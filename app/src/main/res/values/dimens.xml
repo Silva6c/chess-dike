@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 悬浮窗共用尺寸（对齐 Cabinet） -->
+<resources>
+    <dimen name="qi_r_s">8dp</dimen>
+    <dimen name="qi_r_m">12dp</dimen>
+    <dimen name="qi_r_xl">20dp</dimen>
+</resources>

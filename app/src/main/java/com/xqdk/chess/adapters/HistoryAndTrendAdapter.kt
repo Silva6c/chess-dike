@@ -15,7 +15,17 @@ import com.xqdk.chess.controllers.GameController
 
 class HistoryAndTrendAdapter(private val context: Context, private val tableLayout: TableLayout, private val chart: LineChart?, private val controller: GameController) {
 
+    /** 上次重建的数据签名（历史长度 + 当前局面分）：数据未变不重建（根因 5） */
+    private var lastUpdateSignature = Long.MIN_VALUE
+
     fun update() {
+        // 节流（根因 5）：GameController 每条引擎 eval 回调都发 UPDATEUI 驱动 update()，
+        // 历史表 removeAllViews 逐行 inflate / 趋势图全量重建 Entry 都很重。
+        // 以"历史长度 + 当前局面分"为签名，数据未变直接跳过；悔棋/新游戏长度必变不受影响
+        val sig = controller.game.history.size.toLong() * 1000003L +
+            controller.game.currentBoard.score.toLong()
+        if (sig == lastUpdateSignature) return
+        lastUpdateSignature = sig
         if(controller.isShowTrends) {
             updateChart()
         } else {

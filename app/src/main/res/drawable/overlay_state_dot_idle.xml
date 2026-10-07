@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 状态点初始兜底（空心圆，未启动语义）；运行期由 OverlayPanelView 的 dotHollow
+     复用实例按状态语义改描边色（XML 色仅首帧闪现，取次级灰与深色档一致） -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+    <solid android:color="#00000000" />
+    <stroke
+        android:width="1.5dp"
+        android:color="@color/qi_muted" />
+</shape>

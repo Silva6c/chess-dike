@@ -1,4 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 悬浮窗主面板（392×197dp 工程契约，对齐 Cabinet）：
+     左列 = 结构化 HUD（状态行 → 遮挡提醒 → 主状态大字 → 优势 → 细线 → 候选 + 点阵 → 三按钮），
+     中列 = 迷你棋盘（171×185dp，几何与 OverlayChessView 一致），
+     右列 = 值芯片（深度/哈希）＋ 动作按钮（更新/停止/关闭）两级分权。
+     列宽 114/171/90 与内外距（6+114+2+2+171+2+90+6）不得改动——ScreenAssistService
+     按 392×197dp 计算默认位置与遮挡判定（⚠ 代码注释加和是 393，以代码值 dp(392) 为准）。
+     真背景层 = 本根节点 overlay_root（id 对应 bgLayer）：悬浮窗窗口 root（OverlayPanelView）
+     自身的 background 运行期替换不生效，换肤一律改这一层 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/overlay_root"
     android:layout_width="wrap_content"
@@ -9,120 +17,193 @@
     android:orientation="horizontal"
     android:padding="6dp">
 
-    <!-- 左列：状态多行小字为主体（maxLines 封顶防溢出）+ 一行低频小按钮。
-         列高不再死锁 171dp，由内容自然撑起（棋盘 171dp 主导面板高度） -->
+    <!-- 左列：状态行 + 主状态大字 + 优势 + 候选（1 秒读清，其余全部降噪） -->
     <LinearLayout
-        android:layout_width="132dp"
+        android:id="@+id/overlay_col_left"
+        android:layout_width="114dp"
         android:layout_height="wrap_content"
         android:orientation="vertical">
 
-        <TextView
-            android:id="@+id/overlay_status"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:minHeight="118dp"
-            android:ellipsize="end"
-            android:maxLines="8"
-            android:text="识别中…"
-            android:textColor="#FFE082"
-            android:textSize="13sp" />
-
+        <!-- 状态行：● 识别中（点色 = 运行玉 / 等待琥珀 / 停止灰 / 异常红） -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <View
+                android:id="@+id/overlay_state_dot"
+                android:layout_width="6dp"
+                android:layout_height="6dp"
+                android:background="@drawable/overlay_state_dot_idle" />
+
+            <TextView
+                android:id="@+id/overlay_state"
+                style="@style/OverlayState"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="5dp"
+                android:layout_weight="1" />
+        </LinearLayout>
+
+        <!-- 遮挡提醒：悬浮窗盖住已定位棋盘时显示（FLAG_SECURE 后不影响识别但挡视线，
+             移开即消失）。独立小行而非挤占状态行；GONE 态不占高，392×197dp 契约不受影响 -->
+        <TextView
+            android:id="@+id/overlay_occluded"
+            style="@style/OverlayState"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="3dp"
+            android:text="挡住棋盘，建议移开"
+            android:visibility="gone" />
+
+        <!-- 主状态大字：轮到我方走 / 已停止指导 / 引擎异常… -->
+        <TextView
+            android:id="@+id/overlay_status"
+            style="@style/OverlayHeadline"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="识别中" />
+
+        <!-- 优势行：红方优势 +0.8（占优玉绿 / 劣势警示红） -->
+        <TextView
+            android:id="@+id/overlay_advantage"
+            style="@style/OverlayAdvantage"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:textColor="@color/qi_jade_text"
+            android:visibility="gone" />
+
+        <View
+            android:id="@+id/overlay_divider"
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="6dp"
+            android:background="@color/qi_line1" />
+
+        <!-- 候选/预案：建议 炮二平五 ✓（点阵折进尾部，见 OverlayPanelView.render） -->
+        <TextView
+            android:id="@+id/overlay_candidate"
+            style="@style/OverlayCandidate"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:textColor="@color/qi_ivory"
+            android:visibility="gone" />
+
+        <!-- 低频小按钮：2×2 网格（上行=变招/变招档，下行=悔棋/手动）。
+             变招档 = 引擎 MultiPV 路数（1-3 轮流，1 路算力最全），文字随档位更新 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
             android:orientation="horizontal">
 
             <TextView
                 android:id="@+id/overlay_btn_change"
-                style="@style/OverlayButton"
-                android:layout_width="38dp"
-                android:layout_height="30dp"
-                android:layout_marginHorizontal="2dp"
-                android:gravity="center"
-                android:paddingHorizontal="0dp"
+                style="@style/OverlayAction"
+                android:layout_width="0dp"
+                android:layout_height="28dp"
+                android:layout_marginEnd="2dp"
+                android:layout_weight="1"
                 android:text="变招" />
 
             <TextView
+                android:id="@+id/overlay_btn_multipv"
+                style="@style/OverlayAction"
+                android:layout_width="0dp"
+                android:layout_height="28dp"
+                android:layout_marginStart="2dp"
+                android:layout_weight="1"
+                android:text="3变" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:orientation="horizontal">
+
+            <TextView
                 android:id="@+id/overlay_btn_undo"
-                style="@style/OverlayButton"
-                android:layout_width="38dp"
-                android:layout_height="30dp"
-                android:layout_marginHorizontal="2dp"
-                android:gravity="center"
-                android:paddingHorizontal="0dp"
+                style="@style/OverlayAction"
+                android:layout_width="0dp"
+                android:layout_height="28dp"
+                android:layout_marginEnd="2dp"
+                android:layout_weight="1"
                 android:text="悔棋" />
 
             <TextView
                 android:id="@+id/overlay_btn_manual"
-                style="@style/OverlayButton"
-                android:layout_width="38dp"
-                android:layout_height="30dp"
-                android:layout_marginHorizontal="2dp"
-                android:gravity="center"
-                android:paddingHorizontal="0dp"
+                style="@style/OverlayAction"
+                android:layout_width="0dp"
+                android:layout_height="28dp"
+                android:layout_marginStart="2dp"
+                android:layout_weight="1"
                 android:text="手动" />
         </LinearLayout>
     </LinearLayout>
 
     <com.xqdk.chess.assist.ui.OverlayChessView
         android:id="@+id/overlay_chess"
-        android:layout_width="158dp"
-        android:layout_height="171dp"
-        android:layout_marginHorizontal="4dp" />
+        android:layout_width="171dp"
+        android:layout_height="185dp"
+        android:layout_marginHorizontal="2dp" />
 
-    <!-- 右列：5 个等宽等高按钮（wrap_content 宽在悬浮窗测量下会被压成竖排，必须固定宽） -->
+    <!-- 右列：值芯片（深度/哈希，无描边）＋ 动作按钮（更新/停止/关闭，1dp 描边）
+         按钮 23dp 高 + 2dp 间距，总高收进棋盘高度内；
+         水平 padding 让按钮/芯片两侧各收 2dp——不顶面板圆角边框（392dp 列宽契约不动） -->
     <LinearLayout
-        android:layout_width="78dp"
+        android:id="@+id/overlay_col_right"
+        android:layout_width="90dp"
         android:layout_height="wrap_content"
-        android:orientation="vertical">
+        android:layout_marginStart="2dp"
+        android:orientation="vertical"
+        android:paddingHorizontal="2dp">
 
         <TextView
             android:id="@+id/overlay_btn_strength"
-            style="@style/OverlayButton"
-            android:layout_width="match_parent"
-            android:layout_height="30dp"
-            android:gravity="center"
-            android:paddingHorizontal="2dp"
-            android:text="深度20" />
+            style="@style/OverlayChip"
+            android:text="深度 —" />
 
         <TextView
             android:id="@+id/overlay_btn_hash"
-            style="@style/OverlayButton"
-            android:layout_width="match_parent"
-            android:layout_height="30dp"
-            android:layout_marginTop="5dp"
-            android:gravity="center"
-            android:paddingHorizontal="2dp"
-            android:text="Hash256" />
+            style="@style/OverlayChip"
+            android:layout_marginTop="2dp"
+            android:text="哈希 —" />
+
+        <!-- 引擎芯片（可点）：显示当前识别引擎（ONNX/YOLO），点击热切换并重新确认 -->
+        <TextView
+            android:id="@+id/overlay_btn_engine"
+            style="@style/OverlayChip"
+            android:layout_marginTop="2dp"
+            android:text="引擎 —" />
 
         <TextView
             android:id="@+id/overlay_btn_turn"
-            style="@style/OverlayButton"
+            style="@style/OverlayAction"
             android:layout_width="match_parent"
-            android:layout_height="30dp"
-            android:layout_marginTop="5dp"
-            android:gravity="center"
-            android:paddingHorizontal="2dp"
-            android:text="更新棋局" />
+            android:layout_height="23dp"
+            android:layout_marginTop="2dp"
+            android:text="更新" />
 
         <TextView
             android:id="@+id/overlay_btn_pause"
-            style="@style/OverlayButton"
+            style="@style/OverlayAction"
             android:layout_width="match_parent"
-            android:layout_height="30dp"
-            android:layout_marginTop="5dp"
-            android:gravity="center"
-            android:paddingHorizontal="2dp"
+            android:layout_height="23dp"
+            android:layout_marginTop="2dp"
+            android:background="@drawable/overlay_action_stop_bg"
             android:text="停止" />
 
         <TextView
             android:id="@+id/overlay_btn_close"
-            style="@style/OverlayButton"
+            style="@style/OverlayAction"
             android:layout_width="match_parent"
-            android:layout_height="30dp"
-            android:layout_marginTop="5dp"
-            android:gravity="center"
-            android:paddingHorizontal="2dp"
+            android:layout_height="23dp"
+            android:layout_marginTop="2dp"
             android:text="关闭" />
     </LinearLayout>
 </LinearLayout>

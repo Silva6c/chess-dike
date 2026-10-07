@@ -2,11 +2,6 @@
 <resources>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
-    <color name="light_blue_600">#FF039BE5</color>
-    <color name="light_blue_900">#FF01579B</color>
-    <color name="light_blue_A200">#FF40C4FF</color>
-    <color name="light_blue_A400">#FF00B0FF</color>
-    <color name="black_overlay">#66000000</color>
     <color name="choice_color_1">#fffa00</color>
     <color name="choice_color_2">#ff9500</color>
     <color name="choice_color_3">#5ed500</color>
@@ -14,5 +9,33 @@
     <color name="choice_color_5">#00c6b0</color>
     <color name="move_history_background">#0D000000</color>
     <color name="game_hint_background">#80FFFFFF</color>
+
+    <!-- ==== 悬浮窗语义色 token（对齐 Cabinet，视图按语义取色不写字面色）====
+         注意 qi_amber（深，#FFC107，点阵/描边用）与 qi_amber_text（浅，#FFE082，文字用）的用途区分 -->
+    <color name="qi_ink">#14171C</color>
+    <!-- 朱砂主色（对齐 Cabinet："朱砂唯一主色，琥珀/玉/石青/警示只用于状态"）：
+         qi_zhu 品牌主色 / qi_zhu_btn 按钮实底（白字对比 4.5:1）/ qi_zhu_btn_press 按压加深 -->
+    <color name="qi_zhu">#D05A44</color>
+    <color name="qi_zhu_btn">#C35440</color>
+    <color name="qi_zhu_btn_press">#B04A38</color>
+    <color name="qi_glass">#E61B1E24</color>
+    <color name="qi_glass_black">#F2000000</color>
+    <color name="qi_glass_light">#E6ECEFF1</color>
+    <color name="qi_ivory">#E8E6E1</color>
+    <color name="qi_muted">#A8ADB6</color>
+    <color name="qi_amber">#FFC107</color>
+    <color name="qi_amber_text">#FFE082</color>
+    <color name="qi_jade_arrow">#1B5E20</color>
+    <color name="qi_jade_fill">#A5D6A7</color>
+    <color name="qi_jade_text">#81C784</color>
+    <color name="qi_jade_dot">#4CAF50</color>
+    <color name="qi_blue">#2B6FFF</color>
+    <color name="qi_blue_fill">#8AB6FF</color>
+    <color name="qi_danger">#FF5252</color>
+    <color name="qi_red_side">#E53935</color>
+    <color name="qi_black_side">#37474F</color>
+    <color name="qi_line1">#1AFFFFFF</color>
+    <color name="qi_line2">#29FFFFFF</color>
+    <color name="qi_line3">#47FFFFFF</color>
 
 </resources>

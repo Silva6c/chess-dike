@@ -1,6 +1,6 @@
 #!/bin/bash
 echo "Build APK"
-./gradlew assembleArmv8-Release assembleArmv8-dotprod-Release
+./gradlew assembleRelease
 
 echo "copy apk"
 rm docs/apk/*.apk

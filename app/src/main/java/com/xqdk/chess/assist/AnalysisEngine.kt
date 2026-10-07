@@ -20,13 +20,19 @@ class AnalysisEngine(
     private val context: Context,
     private val listener: Listener,
     searchDepth: Int = 20,
-    private val maxPv: Int = 3,
+    maxPv: Int = 3,
 ) {
     interface Listener {
         fun onEngineReady()
         fun onSearchUpdate(result: AnalysisResult)
         fun onSearchDone(result: AnalysisResult)
         fun onEngineError(message: String)
+    }
+
+    companion object {
+        /** UCI 行分词正则（预编译）：pikafish 深搜期每秒上百条 info 行，
+         *  split(Regex(...)) 每次现场 Pattern.compile 是纯浪费 */
+        private val WS = Regex("\\s+")
     }
 
     private val tag = "AnalysisEngine"
@@ -58,9 +64,22 @@ class AnalysisEngine(
     @Volatile private var hashMb: Int = 256
     @Volatile private var appliedHash = -1
 
+    /**
+     * 变招路数（MultiPV，1-3）：悬浮窗"变招档"按钮热更新。
+     * 1 路 = 单变招，全部算力集中于最佳着（最强）；2-3 路给备选候选但摊薄算力。
+     * 可热更新，对下一次搜索生效（两次搜索之间下发 setOption，见 searchOnce）。
+     */
+    @Volatile private var maxPv: Int = maxPv.coerceIn(1, 3)
+    @Volatile private var appliedMultiPv = -1
+
     /** 热更新搜索深度（引擎强度档位），对下一次搜索生效 */
     fun setSearchDepth(depth: Int) {
         searchDepth = depth.coerceIn(6, 40)
+    }
+
+    /** 热更新变招路数（MultiPV 1-3），对下一次搜索生效 */
+    fun setMultiPv(n: Int) {
+        maxPv = n.coerceIn(1, 3)
     }
 
     /** 热更新 Hash（面板"Hash"按钮）：只在引擎空闲的两次搜索之间下发 setoption */
@@ -114,7 +133,7 @@ class AnalysisEngine(
             val line = eng.readLineFromEngine(dl.toInt()) ?: throw IllegalStateException("引擎进程意外退出")
             elapsed += dl
             if (line.isEmpty()) continue
-            val tokens = line.trim().split(Regex("\\s+"))
+            val tokens = line.trim().split(WS)
             when {
                 tokens[0] == "uciok" -> uciok = true
                 tokens[0] == "id" || tokens[0] == "option" -> eng.registerOption(tokens.toTypedArray())
@@ -132,6 +151,7 @@ class AnalysisEngine(
         eng.setOption("Hash", hashMb)
         eng.setOption("MultiPV", maxPv)
         appliedHash = hashMb
+        appliedMultiPv = maxPv
 
         // 与游戏内流程一致：新对局标记 + 就绪握手（显式发送 isready，引擎才会回复 readyok）
         eng.writeLineToEngine("ucinewgame")
@@ -170,11 +190,19 @@ class AnalysisEngine(
     private fun searchOnce(fen: String) {
         val eng = engine ?: return
         val lines = LinkedHashMap<Int, MutableAnalysisLine>()
-        // Hash 档位变更：仅在两次搜索之间下发（UCI 规范不建议搜索中 setoption）
+        // Hash / MultiPV 档位变更：仅在两次搜索之间下发（UCI 规范不建议搜索中 setoption；
+        // MultiPV 变更会清搜索树，搜索中下发会毁掉当前分析的连续性）
         if (appliedHash != hashMb) {
             eng.setOption("Hash", hashMb)
             appliedHash = hashMb
         }
+        if (appliedMultiPv != maxPv) {
+            eng.setOption("MultiPV", maxPv)
+            appliedMultiPv = maxPv
+        }
+        // 走子方视角（红=非 b）整次搜索固定：提前一次算好，不在每条 info 行的
+        // 结果构造里重复 split（pikafish 深搜期间每秒几十条 info，高频路径省分配）
+        val redGo = try { fen.split(" ")[1] != "b" } catch (e: Exception) { true }
         eng.writeLineToEngine("position fen $fen")
         // 深度制（与对弈默认 "go depth 20" 同款）：算到目标深度自然收束，简单局面秒出
         eng.writeLineToEngine("go depth $searchDepth")
@@ -185,16 +213,13 @@ class AnalysisEngine(
         while (System.currentTimeMillis() < deadline) {
             // null = 引擎输出流已关闭（进程退出/关停）：立即结束，避免空转至超时
             val line = eng.readLineFromEngine(250) ?: return
-            val tokens = line.trim().split(Regex("\\s+"))
+            val tokens = line.trim().split(WS)
             if (tokens.isEmpty()) continue
             if (tokens[0] == "info") {
                 // 引擎自述行（如 NNUE 加载信息）转发到 logcat，便于远程诊断棋力问题
                 if (tokens.contains("string")) Log.i(tag, "engine: ${line.trim()}")
                 parseInfo(tokens)?.let { ml ->
                     lines[ml.multiPv] = ml
-                    val redGo = try {
-                        fen.split(" ")[1] != "b"
-                    } catch (e: Exception) { true }
                     val res = AnalysisResult(fen, redGo, null, lines.values.sortedBy { it.multiPv }.map {
                         it.toAnalysisLine()
                     })
@@ -202,7 +227,6 @@ class AnalysisEngine(
                 }
             } else if (tokens[0] == "bestmove") {
                 val bm = if (tokens.size > 1) tokens[1] else null
-                val redGo = try { fen.split(" ")[1] != "b" } catch (e: Exception) { true }
                 val res = AnalysisResult(fen, redGo, bm,
                     lines.values.sortedBy { it.multiPv }.map { it.toAnalysisLine() })
                 listener.onSearchDone(res)
@@ -214,17 +238,16 @@ class AnalysisEngine(
         val dl2 = System.currentTimeMillis() + 1500
         while (System.currentTimeMillis() < dl2) {
             val line = eng.readLineFromEngine(250) ?: return
-            val tokens = line.trim().split(Regex("\\s+"))
+            val tokens = line.trim().split(WS)
             if (tokens.isEmpty()) continue
             if (tokens[0] == "bestmove") {
                 val bm = if (tokens.size > 1) tokens[1] else null
-                val redGo = try { fen.split(" ")[1] != "b" } catch (e: Exception) { true }
                 listener.onSearchDone(AnalysisResult(fen, redGo, bm,
                     lines.values.sortedBy { it.multiPv }.map { it.toAnalysisLine() }))
                 return
             }
         }
-        listener.onSearchDone(AnalysisResult(fen, true, null,
+        listener.onSearchDone(AnalysisResult(fen, redGo, null,
             lines.values.sortedBy { it.multiPv }.map { it.toAnalysisLine() }))
     }
 
