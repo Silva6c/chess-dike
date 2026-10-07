@@ -59,3 +59,6 @@ docs/engineer-handoff.md
 
 # 本地备份目录（G 盘删除前的完整备份），绝不入公开仓库
 G-backup/
+
+# 本文档（内部推送规程）不入公开仓库
+docs/推送与维护规程.md
