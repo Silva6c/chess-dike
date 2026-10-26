@@ -12,8 +12,9 @@
 
 ## 来源
 
-模型与算法来源：[Shirakawa-Kotone/chinese-chess-helper](https://github.com/Shirakawa-Kotone/chinese-chess-helper)
-（OnnxRecognizer 原实现）。本工程的移植实现位于 `OnnxBoardRecognizer.kt` / `OnnxGeom.kt`。
+模型与算法来源：[yolo12138/Chinese_Chess_Recognition](https://huggingface.co/spaces/yolo12138/Chinese_Chess_Recognition)（Hugging Face Space）。
+工程实现参考：[Shirakawa-Kotone/chinese-chess-helper](https://github.com/Shirakawa-Kotone/chinese-chess-helper)
+（OnnxRecognizer 原实现），本工程的移植实现位于 `OnnxBoardRecognizer.kt` / `OnnxGeom.kt`。
 
 ## 模型校验
 

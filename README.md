@@ -15,8 +15,10 @@
 - 原项目"象棋鱼"（作者 zfdang，[GitHub](https://github.com/zfdang/chinese-chess-android)）——
   本项目在其基础上二次开发；
 - [Vincentzyx/VinXiangQi](https://github.com/Vincentzyx/VinXiangQi) —— YOLO 棋子检测权重文件来源（GPL-3.0）；
-- [Shirakawa-Kotone/chinese-chess-helper](https://github.com/Shirakawa-Kotone/chinese-chess-helper) ——
+- [yolo12138/Chinese_Chess_Recognition](https://huggingface.co/spaces/yolo12138/Chinese_Chess_Recognition) ——
   ONNX 两步式识别引擎（RTMPose 角点 + Swin 分类）的模型与算法来源；
+- [Shirakawa-Kotone/chinese-chess-helper](https://github.com/Shirakawa-Kotone/chinese-chess-helper) ——
+  两步式识别的工程实现参考（OnnxRecognizer 原实现）；
 - [Pikafish](https://github.com/official-pikafish/Pikafish) 引擎团队与
   [DroidFish](https://github.com/peterosterlund2/droidfish)（Peter Österlund）—— 引擎与对弈框架基座（GPL-3.0）。
 
@@ -50,7 +52,7 @@
 | Pikafish 引擎（`libpikafish-armv8.so` / `-dotprod.so`，GPL-3.0） | ✅ 分发 | ✅ 内置 | `app/src/main/pikafish/arm64-v8a/` |
 | Pikafish NNUE 权重（`libpikafish.nnue.so`，GPL-3.0） | ✅ 分发 | ✅ 内置 | 同上，约 45MB |
 | YOLO 棋子检测模型（`assets/yolov5n_xq_fp16.tflite`） | ✅ 分发 | ✅ 内置 | 权重来自 VinXiangQi |
-| **ONNX 识别模型**（`assets/models/*.onnx`，共约 21.5MB） | ❌ `.gitignore` 排除 | 需自行放置 | 两步式识别引擎（RTMPose 角点 + Swin 分类，来自 chinese-chess-helper）；未放置时自动回退 YOLO，见 `assets/models/README.md` |
+| **ONNX 识别模型**（`assets/models/*.onnx`，共约 21.5MB） | ❌ `.gitignore` 排除 | 需自行放置 | 两步式识别引擎（RTMPose 角点 + Swin 分类，模型来自 Hugging Face Chinese_Chess_Recognition）；未放置时自动回退 YOLO，见 `assets/models/README.md` |
 | **桔库开局库**（`assets/databases/*.obk.zip`） | ❌ `.gitignore` 排除 | ✅ 内置 | 第三方版权内容不入 git；缺失时对弈/连线**自动降级为纯引擎模式**，不影响使用 |
 | 内置棋谱书（`assets/XQF/`） | ❌ `.gitignore` 排除（仅留说明） | ✅ 内置 | 第三方版权内容；克隆者可自行导入 `.xqf` / `.pgn` |
 
