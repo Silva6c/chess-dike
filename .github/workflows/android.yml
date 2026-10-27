@@ -4,16 +4,15 @@ name: Build-XQDK
 on:
   workflow_dispatch:
 
-# 创建 Release 需要 contents 写权限
-permissions:
-  contents: write
-
+# 产物只作为 artifact 挂在本次运行上。2026-10-28 规范化：删除永不触发的
+# Release 发布步骤（workflow_dispatch 触发下 if: event_name == 'push' 恒假，
+# 属死逻辑）；恢复自动发布等恢复推送时另行立项。上传 artifact 无需写权限。
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
 
-    # versionCode = git 提交数（见 app/build.gradle.kts 的 gitVersion），需要完整历史
+    # versionCode = git 提交数（见 app/build.gradle.kts 的 gitCommitCount），需要完整历史
     - name: checkout codes
       uses: actions/checkout@v4
       with:
@@ -26,6 +25,8 @@ jobs:
         distribution: 'temurin'
         cache: gradle
 
+    # 签名出库后 CI 无 cchess.release.jks 与密码，构建自动回退 debug 签名
+    # （见 build.gradle.kts 的 release signingConfig 回退逻辑）
     - name: Assemble Release APKs
       run: ./gradlew assembleArmv8Release assembleArmv8-dotprodRelease --stacktrace
 
@@ -37,11 +38,8 @@ jobs:
         for f in *.apk; do zip "${f%.apk}.zip" "$f"; done
         ls -l
 
-    # 仅推送到 main 时发布 Release；PR 构建只做编译验证
-    - name: Create Release
-      if: github.event_name == 'push'
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        VER=$(git rev-list HEAD --count)
-        gh release create "v$VER" --title "Release $VER" --notes "象棋迪克 XQDK 自动构建（versionCode=$VER）" dist/*.zip
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: XQDK-apks
+        path: dist/*.zip
