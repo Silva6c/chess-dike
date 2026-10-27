@@ -123,7 +123,7 @@ class OverlayPanelView @JvmOverloads constructor(
      * 子 View 的背景可正常替换——换肤一律改这一层，窗口 root 自身保持透明
      * （Cabinet 踩坑教训 ①）。
      */
-    private lateinit var bgLayer: View
+    private val bgLayer: View
 
     /** 当前主题调色板（applyTheme 注入；render 只按语义取色，不出现字面色值） */
     private var palette: QiPalette = OverlayTheme.DARK.palette

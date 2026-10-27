@@ -93,22 +93,51 @@ class AnalysisEngine(
             started = true
         }
         executor.execute {
-            // 启动失败自动重试一次；仍失败才上报（服务端会把错误显示到悬浮窗状态栏）
-            var attempt = 0
-            while (!ready && !shuttingDown && attempt < 2) {
-                attempt++
-                try {
-                    doStart()
-                } catch (e: Exception) {
-                    Log.e(tag, "engine start failed (attempt $attempt)", e)
-                    if (attempt >= 2) {
-                        listener.onEngineError("引擎启动失败：${e.message ?: "未知原因"}（请重新连线重试）")
+            while (!shuttingDown) {
+                if (engine == null || !ready) {
+                    // 启动/自愈（失败自动重试一次；仍失败上报后休眠再整体重试，
+                    // 引擎线程保持存活——原实现 started 闩使失败后永不恢复）
+                    var attempt = 0
+                    while (!ready && !shuttingDown && attempt < 2) {
+                        attempt++
+                        try {
+                            doStart()
+                        } catch (e: Exception) {
+                            Log.e(tag, "engine start failed (attempt $attempt)", e)
+                            if (attempt >= 2) {
+                                listener.onEngineError("引擎启动失败：${e.message ?: "未知原因"}（请重新连线重试）")
+                            }
+                        }
+                        if (!ready && !shuttingDown && attempt < 2) {
+                            runCatching { engine?.shutDown() }
+                            engine = null
+                            try { Thread.sleep(1200) } catch (e: InterruptedException) { return@execute }
+                        }
                     }
+                    if (!ready) {
+                        try { Thread.sleep(3000) } catch (e: InterruptedException) { return@execute }
+                    }
+                    continue
                 }
-                if (!ready && !shuttingDown && attempt < 2) {
+                val fen = pendingFen
+                if (fen == null) {
+                    synchronized(lock) {
+                        try { lock.wait(300) } catch (e: InterruptedException) { Thread.currentThread().interrupt(); return@execute }
+                    }
+                    continue
+                }
+                pendingFen = null
+                try {
+                    searchOnce(fen)
+                } catch (e: Exception) {
+                    // 搜索中的任何异常（如引擎进程死亡、管道断裂）不得杀死引擎线程：
+                    // 释放引擎对象走自愈重启（原实现异常直接终止线程且 started 闩使
+                    // start() 永远 no-op，UI 永远停在"引擎思考中…"）
+                    Log.e(tag, "searchOnce failed", e)
                     runCatching { engine?.shutDown() }
                     engine = null
-                    try { Thread.sleep(1200) } catch (e: InterruptedException) { return@execute }
+                    ready = false
+                    listener.onEngineError("引擎搜索异常，正在自愈…")
                 }
             }
         }
@@ -167,21 +196,8 @@ class AnalysisEngine(
         ready = true
         Log.i(tag, "analysis engine ready")
         listener.onEngineReady()
-
-        // 进入搜索循环：等待 request() 投递局面，无任务时休眠。
-        // 注意：不做"同局面跳过"——重复局面（对局来回换子/悔棋重发）必须重新搜索，
-        // 否则会永远停在旧结果上（表现为"卡在预测那一步、停止对我方指导"）。
-        while (!shuttingDown) {
-            val fen = pendingFen
-            if (fen == null) {
-                synchronized(lock) {
-                    try { lock.wait(300) } catch (e: InterruptedException) { Thread.currentThread().interrupt(); return }
-                }
-                continue
-            }
-            pendingFen = null
-            searchOnce(fen)
-        }
+        // 搜索循环已上移至 start() 的常驻任务：本方法只负责"启动到就绪"，
+        // 搜索异常/引擎死亡后由外层循环走自愈重启，不再依赖 started 闩
     }
 
     @Volatile private var shuttingDown = false
@@ -221,14 +237,14 @@ class AnalysisEngine(
                 parseInfo(tokens)?.let { ml ->
                     lines[ml.multiPv] = ml
                     val res = AnalysisResult(fen, redGo, null, lines.values.sortedBy { it.multiPv }.map {
-                        it.toAnalysisLine()
+                        it.toAnalysisLine(redGo)
                     })
                     listener.onSearchUpdate(res)
                 }
             } else if (tokens[0] == "bestmove") {
                 val bm = if (tokens.size > 1) tokens[1] else null
                 val res = AnalysisResult(fen, redGo, bm,
-                    lines.values.sortedBy { it.multiPv }.map { it.toAnalysisLine() })
+                    lines.values.sortedBy { it.multiPv }.map { it.toAnalysisLine(redGo) })
                 listener.onSearchDone(res)
                 return
             }
@@ -243,20 +259,29 @@ class AnalysisEngine(
             if (tokens[0] == "bestmove") {
                 val bm = if (tokens.size > 1) tokens[1] else null
                 listener.onSearchDone(AnalysisResult(fen, redGo, bm,
-                    lines.values.sortedBy { it.multiPv }.map { it.toAnalysisLine() }))
+                    lines.values.sortedBy { it.multiPv }.map { it.toAnalysisLine(redGo) }))
                 return
             }
         }
         listener.onSearchDone(AnalysisResult(fen, redGo, null,
-            lines.values.sortedBy { it.multiPv }.map { it.toAnalysisLine() }))
+            lines.values.sortedBy { it.multiPv }.map { it.toAnalysisLine(redGo) }))
     }
 
     private class MutableAnalysisLine(val multiPv: Int) {
         var depth = 0
+        /** 走子方视角分数（引擎 info 原值） */
         var scoreCp = 0
+        /** 走子方视角杀棋步数（引擎 info 原值，正=走子方将杀） */
         var mateIn: Int? = null
         var pv: List<String> = emptyList()
-        fun toAnalysisLine(): AnalysisLine = AnalysisLine(multiPv, depth, scoreCp, mateIn, pv)
+
+        /** 换算为红方视角：pikafish score 以走子方视角给出，黑方行棋时取反（原实现未换算，
+         *  黑走时悬浮窗"红方优势/劣势"与 GOOD/BAD 色调、杀棋方向全部反转） */
+        fun toAnalysisLine(redGo: Boolean): AnalysisLine = AnalysisLine(
+            multiPv, depth,
+            if (redGo) scoreCp else -scoreCp,
+            mateIn?.let { if (redGo) it else -it },
+            pv)
     }
 
     private fun parseInfo(tokens: List<String>): MutableAnalysisLine? {

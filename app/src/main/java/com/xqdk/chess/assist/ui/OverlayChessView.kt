@@ -233,7 +233,9 @@ class OverlayChessView @JvmOverloads constructor(
         center(sel.first, sel.second)
         val px = cx; val py = cy
         val r = pieceSize * scale / 2f
-        selectStroke.strokeWidth = 8f * scale.coerceAtLeast(0.75f)
+        // 括号修正：原写法 8f * scale.coerceAtLeast(0.75f) 恒等于 8×0.75=6px，
+        // 选中圈描边不随棋盘缩放（对照上方 arrowStroke 的 (2f * scale) 写法）
+        selectStroke.strokeWidth = (8f * scale).coerceAtLeast(0.75f)
         canvas.drawCircle(px, py, r, selectFill)
         canvas.drawCircle(px, py, r, selectStroke)
     }

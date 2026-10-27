@@ -31,7 +31,7 @@
         <activity
             android:name=".GameActivity"
             android:screenOrientation="portrait"
-            android:exported="true"/>
+            android:exported="false"/>
         <activity
             android:name=".ManualActivity"
             android:screenOrientation="portrait"
@@ -48,7 +48,7 @@
         <activity
             android:name=".assist.ui.AssistActivity"
             android:screenOrientation="portrait"
-            android:exported="true" />
+            android:exported="false" />
         <service
             android:name=".assist.ScreenAssistService"
             android:exported="false"

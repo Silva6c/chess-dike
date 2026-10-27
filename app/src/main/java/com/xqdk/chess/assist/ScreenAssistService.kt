@@ -188,6 +188,8 @@ class ScreenAssistService : Service() {
     @Volatile private var pendingEngine: String? = null
     /** ONNX 两步式识别器（模型 ~21.5MB 加载重，后台线程初始化，期间帧走跳过逻辑） */
     private var onnxEngine: OnnxBoardRecognizer? = null
+    /** onnxEngine 的赋值/释放锁：后台加载线程与 switchEngine 并发，无锁会泄漏 native 会话 */
+    private val onnxEngineLock = Any()
     /** 连续产出结构非法局面的帧数（走子动画过渡帧常客）：连续 3 帧强制角点重定位 */
     private var invalidStreak = 0
     /** 上一次 ONNX 识别耗时（毫秒）：下一帧间隔 = max(下限, 耗时×2)，自适应退避 */
@@ -212,11 +214,11 @@ class ScreenAssistService : Service() {
     /** 当前确认局面的 canonical 棋盘（开局库查询用） */
     @Volatile private var currentCanonical: Array<IntArray>? = null
     private var currentOrientation = Orientation.STANDARD
-    private var lastAnalysis: AnalysisResult? = null
-    private var selectedCandidate = 0
+    @Volatile private var lastAnalysis: AnalysisResult? = null
+    @Volatile private var selectedCandidate = 0
 
     /** 开局库候选（我方回合命中时非空；随 selectedCandidate 循环展示） */
-    private var bookMoves: List<BookData>? = null
+    @Volatile private var bookMoves: List<BookData>? = null
     /** 开局库（与对弈同款）；仅 worker 线程访问，首次查询时惰性初始化 */
     private var openBook: BHOpenBook? = null
     private var openBookFailed = false
@@ -227,12 +229,12 @@ class ScreenAssistService : Service() {
 
     /** 引擎强度档位（固定深度，与对弈"固定深度"制式一致） */
     private val strengthLevels = listOf("快速·深度12" to 12, "标准·深度20" to 20, "强劲·深度24" to 24)
-    private var strengthIndex = 0
+    @Volatile private var strengthIndex = 0
     /** 引擎 Hash 档位（与对弈设置同口径）：从 256 起步循环 */
     private val hashLevels = listOf(256, 512, 1024, 2048)
-    private var hashIndex = 0
+    @Volatile private var hashIndex = 0
     /** 引擎变招路数（MultiPV 1-3，悬浮窗左列"变招档"按钮循环；1 路算力最全） */
-    private var multiPv: Int = 3
+    @Volatile private var multiPv: Int = 3
 
     private var windowManager: WindowManager? = null
     private var overlayPanel: OverlayPanelView? = null
@@ -276,7 +278,10 @@ class ScreenAssistService : Service() {
             startForegroundInternal()
             startCapture(resultCode, data)
         }
-        return START_STICKY
+        // START_NOT_STICKY：录屏授权不可跨进程死亡恢复（MediaProjection resultCode 一次性），
+        // sticky 重启传 null intent 时不会调 startForeground，Android 12+ 会抛
+        // ForegroundServiceDidNotStartInTimeException 直接崩溃
+        return START_NOT_STICKY
     }
 
     private fun startForegroundInternal() {
@@ -321,7 +326,11 @@ class ScreenAssistService : Service() {
         val h = metrics.heightPixels
         val dpi = metrics.densityDpi
 
-        mediaProjection = projectionManager.getMediaProjection(resultCode, data)
+        mediaProjection = projectionManager.getMediaProjection(resultCode, data).also { mp ->
+            // 录屏被系统侧停止（投屏开关/授权对话框"停止"）时服务无从知晓，识别永不自愈
+            // 也无释放——注册回调，onStop 后释放采集并提示（回调任务在 worker 队列串行）
+            mp.registerCallback(projectionCallback, workerHandler)
+        }
         // 记录帧尺寸：悬浮窗遮挡判断把归一化棋盘框换算回像素时需要
         config.frameSize = w to h
         val reader = ImageReader.newInstance(w, h, PixelFormat.RGBA_8888, 2)
@@ -338,7 +347,10 @@ class ScreenAssistService : Service() {
         workerHandler.removeCallbacks(frameTick)
         workerHandler.postDelayed(frameTick, FRAME_TICK_MS)
 
-        // 提前启动分析引擎（后台准备，不阻塞识别）
+        // 提前启动分析引擎（后台准备，不阻塞识别）。
+        // 重建前先关停旧引擎：CLOSE 后服务仍被连线页绑定存活，重新授权走这里时
+        // 直接覆盖引用会泄漏旧 pikafish 进程与 analysis-engine 线程（wait 循环永不退出）
+        analysisEngine?.shutdown()
         analysisEngine = AnalysisEngine(this, analysisListener, config.searchDepth, config.multiPv)
             .also { it.setHash(config.hashMb); it.start() }
         postRender()
@@ -427,6 +439,8 @@ class ScreenAssistService : Service() {
      */
     private val frameTick = object : Runnable {
         override fun run() {
+            // 录屏已释放：不再续期（releaseCapture 的 removeCallbacks 与在途 tick 并发时会重新入队空转）
+            if (mediaProjection == null) return
             if (!paused && !manualMode) {
                 val unstable = tracker.unstableStreak > 0
                 if ((screenChangedSinceRec || unstable) && !pendingFrame) {
@@ -607,16 +621,18 @@ class ScreenAssistService : Service() {
     private fun cropHint(frame: Frame): DoubleArray? = cropHint(frame.width, frame.height)
 
     private fun handleFrame(frame: Frame) {
+        // 引擎切换请求在 worker 帧循环里应用（不在 UI 线程释放/加载会话）；
+        // 置于 paused/manual 早退之前——暂停/手动期间的切换请求不被无限推迟
+        // （状态栏已提示"切换成功"而实际未生效）
+        pendingEngine?.let { want ->
+            pendingEngine = null
+            if (want != engineName) switchEngine(want)
+        }
         if (paused || manualMode) return
         // 保存最近一帧引用（Frame 像素独立分配，保存引用安全）：
         // 画面静止回调停摆时由 frameTick 重放它推进多帧确认
         lastFrame = frame
         debugSaveFrameIfRequested(frame)
-        // 引擎切换请求在 worker 帧循环里应用（不在 UI 线程释放/加载会话）
-        pendingEngine?.let { want ->
-            pendingEngine = null
-            if (want != engineName) switchEngine(want)
-        }
         if (engineName == ENGINE_ONNX) {
             handleFrameOnnx(frame)
             return
@@ -783,8 +799,14 @@ class ScreenAssistService : Service() {
             val ok = try { eng.load() } catch (t: Throwable) {
                 Log.w(TAG, "onnx load threw", t); false
             }
-            if (engineName != ENGINE_ONNX) { eng.release(); return@Thread } // 期间已被切换走
-            onnxEngine = if (ok) eng else null
+            synchronized(onnxEngineLock) {
+                // 期间已被切换走：释放会话（二次校验与赋值同锁，防切回 YOLO 后旧会话挂回泄漏）
+                if (engineName != ENGINE_ONNX) {
+                    eng.release()
+                    return@Thread
+                }
+                onnxEngine = if (ok) eng else null
+            }
             if (!ok) {
                 engineName = ENGINE_YOLO
                 setStatus("ONNX 引擎加载失败\n已回退 YOLO 识别")
@@ -798,8 +820,10 @@ class ScreenAssistService : Service() {
         Log.i(TAG, "switch engine: $engineName -> $want")
         tracker.reset()
         resetSuggestionState()
-        onnxEngine?.release()
-        onnxEngine = null
+        synchronized(onnxEngineLock) {
+            onnxEngine?.release()
+            onnxEngine = null
+        }
         sessionGrid = null
         recMissStreak = 0
         cropUnstableStreak = 0
@@ -995,7 +1019,10 @@ class ScreenAssistService : Service() {
             if (action == OverlayAction.CLOSE) onOverlayAction(action)
             else workerHandler.post { onOverlayAction(action) }
         }
-        panel.onCellTap = ::onManualCellTap
+        // 手动点格 post 到 worker（与 onAction 同策略）：onManualCellTap 写
+        // currentCanonical/history/tracker，与帧循环并发会撕裂 ArrayDeque（原实现
+        // 在 UI 线程原地改，与 post 到 worker 的 UNDO/FLIP 双线程并发写）
+        panel.onCellTap = { x, y -> workerHandler.post { onManualCellTap(x, y) } }
         panel.onDragStateChange = { dragging ->
             userDragging = dragging
             // 拖动结束即时重算遮挡（黄字沿变化显隐），不等 ≤700ms 的下一帧/tick
@@ -1125,7 +1152,9 @@ class ScreenAssistService : Service() {
         history.removeLast()
         val prev = history.last()
         tracker.restore(prev.result, prev.redGo)
-        currentCanonical = prev.result.canonical
+        // 克隆：prev.result.canonical 是历史条目持有的数组，直接引用会在手动模式
+        // 原地改子时污染悔棋锚点（连续悔棋拿到被改写的同一局面）
+        currentCanonical = AssistBoard.clone(prev.result.canonical)
         currentPieces = flatten(prev.result.canonical)
         currentOrientation = prev.result.orientation
         currentFen = prev.fen
@@ -1502,6 +1531,11 @@ class ScreenAssistService : Service() {
     override fun onDestroy() {
         Log.i(TAG, "service destroyed")
         releaseCapture()
+        // 先清主线程在途回调（渲染/节流补绘）：否则残留的 renderOverlay 可能重新 addView
+        mainHandler.removeCallbacksAndMessages(null)
+        // 先停 worker 再释放识别器：worker 可能仍在 detect/recognize 中途，
+        // close 与 run 并发会让识别静默停摆至销毁
+        workerThread.quitSafely()
         yoloDetector?.close()
         yoloDetector = null
         onnxEngine?.release()
@@ -1509,10 +1543,10 @@ class ScreenAssistService : Service() {
         analysisEngine?.shutdown()
         analysisEngine = null
         overlayPanel?.let { p ->
-            windowManager?.removeView(p)
+            // 窗口可能已被系统先行移除：runCatching（与 CLOSE 路径同款）
+            runCatching { windowManager?.removeView(p) }
         }
         overlayPanel = null
-        workerThread.quitSafely()
         super.onDestroy()
     }
 
@@ -1522,9 +1556,24 @@ class ScreenAssistService : Service() {
         virtualDisplay = null
         try { imageReader?.close() } catch (e: Exception) { }
         imageReader = null
+        runCatching { mediaProjection?.unregisterCallback(projectionCallback) }
         try { mediaProjection?.stop() } catch (e: Exception) { }
         mediaProjection = null
         stopForeground(STOP_FOREGROUND_REMOVE)
+    }
+
+    /** 录屏系统侧停止回调（startCapture 注册、releaseCapture 注销）：
+     *  录屏被系统停止时释放采集并提示（此前服务不知道录屏已死，永远"运行中"） */
+    private val projectionCallback = object : MediaProjection.Callback() {
+        override fun onStop() {
+            workerHandler.post {
+                if (mediaProjection != null) {
+                    releaseCapture()
+                    paused = true
+                    setStatus("录屏已被系统停止\n可在连线页重新授权启动")
+                }
+            }
+        }
     }
 
     private fun OverlayPanelView.dp(v: Int): Int =

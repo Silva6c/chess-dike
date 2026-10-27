@@ -59,6 +59,14 @@ class AssistActivity : AppCompatActivity() {
             val cb = binder as? ScreenAssistService.CastBinder
             service = cb?.service()
             bound = true
+            // 按持久化配置补应用主题/识别引擎：绑定前在设置页切换时 service 为 null
+            // 被静默丢弃，运行中服务与页面显示会不一致
+            service?.applyOverlayTheme(
+                OverlayTheme.fromKey(com.xqdk.chess.assist.AssistConfig(this@AssistActivity).overlayTheme)
+            )
+            service?.setRecognizerEngine(
+                com.xqdk.chess.assist.AssistConfig(this@AssistActivity).recognizerEngine
+            )
             refreshStatus()
         }
 
@@ -125,6 +133,17 @@ class AssistActivity : AppCompatActivity() {
             }
         }
         btnStartCapture.setOnClickListener {
+            // 前置校验：悬浮窗未授权时启动服务，ensureOverlay 静默返回 null，
+            // 界面显示"运行中"却永远没有悬浮面板
+            if (!Settings.canDrawOverlays(this)) {
+                Toast.makeText(this, "请先完成①悬浮窗权限授权，再启动屏幕识别", Toast.LENGTH_LONG).show()
+                return@setOnClickListener
+            }
+            // 已在识别中重复点③会白拿一次新授权（startCapture 守卫直接忽略）
+            if (service?.isCapturing() == true) {
+                Toast.makeText(this, "屏幕识别已在运行中", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
             val mpm = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
             projectionLauncher.launch(mpm.createScreenCaptureIntent())
         }
@@ -142,7 +161,8 @@ class AssistActivity : AppCompatActivity() {
             service?.setRecognizerEngine(cfg.recognizerEngine)
         }
 
-        bindService(Intent(this, ScreenAssistService::class.java), connection, Context.BIND_AUTO_CREATE)
+        // bindService 返回值决定是否需要解绑：绑定失败仍置 bound 会在 onDestroy 泄漏连接
+        bound = bindService(Intent(this, ScreenAssistService::class.java), connection, Context.BIND_AUTO_CREATE)
     }
 
     override fun onResume() {
