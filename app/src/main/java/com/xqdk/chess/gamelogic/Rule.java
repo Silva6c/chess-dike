@@ -204,7 +204,9 @@ public class Rule {
                 }
                 break;
             case Piece.BZU: //黑卒
-                if (InArea(fromX, fromY) == 1) {
+                // 未过河 = 尚在黑方半场（y<=4）。原判定 InArea==1 会把宫区(area=2)的卒
+                // （仅可能来自 FEN 载入的局面）误判为过河而获得横走能力
+                if (fromY <= 4) {
                     num = 6;
                     for (int i = 0; i < offsetX[num].length; i++) {
                         int toX = fromX + offsetX[num][i];
@@ -264,7 +266,9 @@ public class Rule {
                 }
                 break;
             case Piece.WBING: //红兵
-                if (InArea(fromX, fromY) == 3) {
+                // 未过河 = 尚在红方半场（y>=5）。原判定 InArea==3 会把宫区(area=4)的兵
+                // （仅可能来自 FEN 载入的局面）误判为过河而获得横走能力
+                if (fromY >= 5) {
                     num = 8;
                     for (int i = 0; i < offsetX[num].length; i++) {
                         int toX = fromX + offsetX[num][i];
@@ -292,13 +296,23 @@ public class Rule {
     }
 
     /*
-    检查走法是否合法
+    检查走法是否合法（几何可达 + 走完己方王安全）
      */
     public static boolean isValidMove(Move move, Board board) {
         if (move == null) {
             return false;
         }
+        if (!isReachableMove(move, board)) {
+            return false;
+        }
+        // 几何可达之外，还需保证走完后己方王安全（不吃王、不被将军、不与对方将帅照脸）
+        return isMoveSafe(move, board);
+    }
 
+    /*
+    检查走法几何上可达（棋子形状与路径），不包含王安全检查
+     */
+    private static boolean isReachableMove(Move move, Board board) {
         int piece = board.getPieceByPosition(move.fromPosition);
         int fromX = move.fromPosition.x;
         int fromY = move.fromPosition.y;
@@ -317,7 +331,42 @@ public class Rule {
         return false;
     }
 
+    /*
+     * 模拟走子并检查走子方将帅是否安全。拒绝三类着法：
+     * 1. 吃将/帅（合法对局不应出现可吃王局面，畸形 FEN 载入后可能出现）；
+     * 2. 自杀着/移动受牵制棋子（走完后己方王被将军）；
+     * 3. 走完后将帅照脸（含非王子移开导致照脸）。
+     * 若局面本无己方王（异常 FEN），一律视为不安全。
+     */
+    public static boolean isMoveSafe(Move move, Board board) {
+        if (move == null || board == null) {
+            return false;
+        }
+        int piece = board.getPieceByPosition(move.fromPosition);
+        if (!Piece.isValid(piece)) {
+            return false;
+        }
+        int captured = board.getPieceByPosition(move.toPosition);
+        if (captured == Piece.BJIANG || captured == Piece.WSHUAI) {
+            // 王不可被吃
+            return false;
+        }
+        int myKing = Piece.isRed(piece) ? Piece.WSHUAI : Piece.BJIANG;
+        Board sim = new Board(board);
+        sim.setPieceByPosition(move.fromPosition, Piece.EMPTY);
+        sim.setPieceByPosition(move.toPosition, piece);
+        Position kingPos = findJiangShuaiPos(myKing, sim);
+        if (kingPos == null) {
+            return false;
+        }
+        return !isJiangShuaiInDanger(myKing, kingPos, sim);
+    }
+
     public static boolean isJiangShuaiInDanger(int piece, Position pos, Board board) {
+        // 王不存在（异常局面）时不判危险，避免空指针；调用方应自行处理终局
+        if (pos == null) {
+            return false;
+        }
         // 马的攻击和别腿，红帅和黑将都会用到
         int num = 4;
         int op_block_num = 10; // 反向蹩马腿
@@ -325,6 +374,11 @@ public class Rule {
         if (piece == Piece.WSHUAI) {
             // 找到红帅的位置
             int x = pos.x, y = pos.y;
+
+            // 与黑将照脸（同列无遮挡）也属危险局面
+            if (flyKing(Piece.WSHUAI, x, y, board) != null) {
+                return true;
+            }
 
             // 被黑马攻击
             for (int i = 0; i < offsetX[num].length; i++) {
@@ -355,6 +409,11 @@ public class Rule {
         } else if(piece == Piece.BJIANG) {
             // 找到黑将的位置
             int x = pos.x, y = pos.y;
+
+            // 与红帅照脸（同列无遮挡）也属危险局面
+            if (flyKing(Piece.BJIANG, x, y, board) != null) {
+                return true;
+            }
 
             // 被红马攻击
             for (int i = 0; i < offsetX[num].length; i++) {

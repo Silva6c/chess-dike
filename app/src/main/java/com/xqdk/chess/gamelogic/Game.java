@@ -118,12 +118,23 @@ public class Game implements Serializable {
         if(currentMove != null) {
             if(Piece.isRed(currentMove.piece)) {
                 Position pos = Rule.findJiangShuaiPos(Piece.BJIANG, currentBoard);
+                if (pos == null) {
+                    // 对方王不存在（仅可能来自畸形 FEN 开局）；判走子方胜，避免空指针
+                    isGameOver = true;
+                    isCheckMate = true;
+                    return GameStatus.CHECKMATE;
+                }
                 isCheck = Rule.isJiangShuaiInDanger(Piece.BJIANG, pos, currentBoard);
                 if(isCheck) {
                     isDead = Rule.isJiangShuaiDead(Piece.BJIANG, pos, currentBoard);
                 }
             } else {
                 Position pos = Rule.findJiangShuaiPos(Piece.WSHUAI, currentBoard);
+                if (pos == null) {
+                    isGameOver = true;
+                    isCheckMate = true;
+                    return GameStatus.CHECKMATE;
+                }
                 isCheck = Rule.isJiangShuaiInDanger(Piece.WSHUAI, pos, currentBoard);
                 if(isCheck) {
                     isDead = Rule.isJiangShuaiDead(Piece.WSHUAI, pos, currentBoard);

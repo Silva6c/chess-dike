@@ -40,8 +40,15 @@ public class GameController implements EngineListener, SearchListener {
 
     public Game game = null;
     private int searchId;
+    // 当前在途请求的 id：引擎回调带回的 searchId 与之不符说明是旧局面的过期回调，
+    // 直接丢弃，避免旧局面的 eval/bestmove 污染新局（旧代码无条件回写状态并抢走一手）
+    private int pendingEvalId = -1;
+    private int pendingSearchId = -1;
     private long searchStartTime;
     private long searchEndTime;
+
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private Runnable autoPlayRunnable = null;
 
     public boolean isComputerPlaying = true;
     public boolean isAutoPlay = true;
@@ -122,6 +129,13 @@ public class GameController implements EngineListener, SearchListener {
         }
 
         game = tempGame;
+        // FEN 局面校验：缺王/王被吃的串会让后续状态判定空指针，开局时即拒绝
+        if (Rule.findJiangShuaiPos(Piece.WSHUAI, game.currentBoard) == null
+                || Rule.findJiangShuaiPos(Piece.BJIANG, game.currentBoard) == null) {
+            Log.e("GameController", "FEN missing king: " + fen);
+            gui.onGameEvent(GameStatus.ILLEGAL, "无效的FEN串（缺少将/帅）");
+            return;
+        }
         if (game.currentBoard.bRedGo) {
             state = ControllerState.WAITING_FOR_USER;
         } else {
@@ -225,8 +239,9 @@ public class GameController implements EngineListener, SearchListener {
         } else {
             board = game.history.get(0).move.board;
         }
+        pendingSearchId = searchId++;
         SearchRequest sr = SearchRequest.searchRequest(
-                searchId++,
+                pendingSearchId,
                 board,
                 game.getMoveList(),
                 new Board(game.currentBoard),
@@ -282,8 +297,9 @@ public class GameController implements EngineListener, SearchListener {
         } else {
             board = game.history.get(0).move.board;
         }
+        pendingSearchId = searchId++;
         SearchRequest sr = SearchRequest.searchRequest(
-                searchId++,
+                pendingSearchId,
                 board,
                 game.getMoveList(),
                 new Board(game.currentBoard),
@@ -324,8 +340,9 @@ public class GameController implements EngineListener, SearchListener {
         } else {
             board = game.history.get(0).move.board;
         }
+        pendingSearchId = searchId++;
         SearchRequest sr = SearchRequest.searchRequest(
-                searchId++,
+                pendingSearchId,
                 board,
                 game.getMoveList(),
                 new Board(game.currentBoard),
@@ -348,8 +365,9 @@ public class GameController implements EngineListener, SearchListener {
         // trigger searchrequest, engine will call notifySearchResult for bestmove
         searchStartTime = System.currentTimeMillis();
         Board board = game.currentBoard;
+        pendingEvalId = searchId++;
         SearchRequest sr = SearchRequest.evalRequest(
-                searchId++,
+                pendingEvalId,
                 board,
                 engineName);
         player.queueSearchRequest(sr);
@@ -480,6 +498,11 @@ public class GameController implements EngineListener, SearchListener {
     }
 
     public void selectMultiPV(int index) {
+        // 候选列表可能已被新搜索清空（multiPVs.clear），先做边界防护再取值
+        if (index < 0 || index >= multiPVs.size()) {
+            Log.e("GameController", "selectMultiPV index out of range: " + index + ", size=" + multiPVs.size());
+            return;
+        }
         Move move = game.getSuggestedMove(index);
         game.clearSuggestedMoves();
         PvInfo pvinfo = multiPVs.get(index);
@@ -550,6 +573,11 @@ public class GameController implements EngineListener, SearchListener {
             }
         }
 
+        // 将死/终局后不再请求评估与自动走棋
+        if (game.isGameOver) {
+            return;
+        }
+
         // start request to evaluate board status
         // result will be returned by notifyEvalResult
         evalCurrentBoard();
@@ -613,6 +641,12 @@ public class GameController implements EngineListener, SearchListener {
         Log.d("GameController", "Search result: bestMove=" + bestMove + ", nextPonderMove=" + nextPonderMove);
         searchEndTime = System.currentTimeMillis();
 
+        // 过期回调（新局/换局后在途的旧请求）直接丢弃，避免旧局着法落进新盘面
+        if (searchId != pendingSearchId) {
+            Log.d("GameController", "Stale search result dropped: " + searchId + " != " + pendingSearchId);
+            return;
+        }
+
         if (state == ControllerState.WAITING_FOR_USER_MULTIPV) {
             // 红方寻求帮助
             // 把multiPV的结果显示在界面上，让用户选择
@@ -642,6 +676,12 @@ public class GameController implements EngineListener, SearchListener {
     @Override
     public void notifyEvalResult(int searchId, float eval) {
         Log.d("GameController", "Eval result: eval=" + eval);
+        // 过期回调（新局/换局后在途的旧 eval）直接丢弃，避免把旧局状态回写进新局
+        if (searchId != pendingEvalId) {
+            Log.d("GameController", "Stale eval result dropped: " + searchId + " != " + pendingEvalId);
+            return;
+        }
+        pendingEvalId = -1;
         game.currentBoard.score = eval;
 
         gui.runOnUIThread(() -> {
@@ -653,15 +693,22 @@ public class GameController implements EngineListener, SearchListener {
 
         // auto nextstep for computer if applicable
         if (isAutoPlay && isComputerPlaying && isBlackTurn()) {
-            // 因为要显示预测着法，所以让电脑延迟500s走棋
-            new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
-                @Override
-                public void run() {
-                    computerForward();
-                }
-            }, 500);
+            // 因为要显示预测着法，所以让电脑延迟500ms走棋；持有引用以便销毁时取消
+            cancelAutoPlay();
+            autoPlayRunnable = () -> computerForward();
+            mainHandler.postDelayed(autoPlayRunnable, 500);
         }
 
+    }
+
+    /**
+     * 取消在途的自动走棋回调（Activity 销毁/关停时调用，避免"幽灵自弈"）。
+     */
+    public void cancelAutoPlay() {
+        if (autoPlayRunnable != null) {
+            mainHandler.removeCallbacks(autoPlayRunnable);
+            autoPlayRunnable = null;
+        }
     }
 
     @Override

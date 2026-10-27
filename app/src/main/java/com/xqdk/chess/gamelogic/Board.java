@@ -207,22 +207,42 @@ public class Board implements Serializable {
         String fen = parts[0];
         int x = 0;
         int y = 0;
+        // 解析前清盘：行数不足的 FEN 不应残留旧局面棋子
+        clear();
         for (int i = 0; i < fen.length(); i++) {
             char c = fen.charAt(i);
             if (c == '/') {
-                // next row
+                // next row；行宽必须满 9 且不能超过 10 行
+                if (x != BOARD_PIECE_WIDTH || y >= BOARD_PIECE_HEIGHT - 1) {
+                    Log.e("Board", "Failed to parse FEN row structure: " + fenString);
+                    return false;
+                }
                 x = 0;
                 y++;
             } else if (c >= '0' && c <= '9') {
-                for (int k = 0; k < c - '0'; k++) {
+                int zeros = c - '0';
+                if (x + zeros > BOARD_PIECE_WIDTH) {
+                    Log.e("Board", "Failed to parse FEN row width: " + fenString);
+                    return false;
+                }
+                for (int k = 0; k < zeros; k++) {
                     piece[y][x] = 0;
                     x++;
                 }
             } else {
-                int value = Piece.pieceValueMap.get(c);
+                Integer value = Piece.pieceValueMap.get(c);
+                if (value == null || x >= BOARD_PIECE_WIDTH) {
+                    // 未知字符（含小写/大小写错误）此前会因自动拆箱 null 直接 NPE
+                    Log.e("Board", "Failed to parse FEN piece char '" + c + "': " + fenString);
+                    return false;
+                }
                 piece[y][x] = value;
                 x++;
             }
+        }
+        if (x != BOARD_PIECE_WIDTH || y != BOARD_PIECE_HEIGHT - 1) {
+            Log.e("Board", "Incomplete FEN string: " + fenString);
+            return false;
         }
         return true;
     }
