@@ -23,9 +23,9 @@ misc.xml
 deploymentTargetDropDown.xml
 render.experimental.xml
 
-# Keystore files
-#*.jks
-#*.keystore
+# Keystore files（2026-10-28 出库：签名密钥不再随仓库分发，密码在 local.properties）
+*.jks
+*.keystore
 
 # Google Services (e.g. APIs or Firebase)
 google-services.json

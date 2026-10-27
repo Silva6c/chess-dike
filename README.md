@@ -69,9 +69,11 @@
 | **桔库开局库**（`assets/databases/*.obk.zip`） | ❌ `.gitignore` 排除 | ✅ 内置 | 第三方版权内容不入 git；缺失时对弈/连线**自动降级为纯引擎模式**，不影响使用 |
 | 内置棋谱书（`assets/XQF/`） | ❌ `.gitignore` 排除（仅留说明） | ✅ 内置 | 第三方版权内容；克隆者可自行导入 `.xqf` / `.pgn` |
 
-**签名**：`app/cchess.release.jks` 与 `signingConfigs` 沿用上游项目的公开配置
-（该密钥库与密码在上游开源仓库中已公开，非私密凭据）。如需以你自己的身份发布，
-请替换为自有 keystore。
+**签名**：release 构建优先使用 `app/cchess.release.jks`（密钥文件与密码
+`CCHES_STORE_PWD` / `CCHES_KEY_PWD` 均自本地 `local.properties` 读取，**不随仓库
+分发**）；密钥或密码缺失时（CI / 全新克隆）自动回退 debug 签名，保证可构建。
+注意：debug 签名的包与既有正式发布包签名不同，**不能覆盖安装**，只能卸载重装。
+如需以你自己的身份发布，请替换为自有 keystore。
 
 **版本规则**：`versionCode` = git 提交数（`app/build.gradle.kts` 的 `gitVersion()`，
 无 git 环境兜底为 1）；APK 产物名 `XQDK_<日期>_<versionCode>_<变体>.apk`。

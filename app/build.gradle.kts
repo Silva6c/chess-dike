@@ -1,6 +1,7 @@
 import com.android.build.gradle.internal.api.BaseVariantOutputImpl
 import java.text.SimpleDateFormat
 import java.util.Date
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
@@ -16,6 +17,12 @@ val gitCommitCount: Int = runCatching {
         workingDir = rootDir
     }.standardOutput.asText.get().trim().toInt()
 }.getOrDefault(1)
+
+// 签名密码自 local.properties（gitignored）读入：CCHES_STORE_PWD / CCHES_KEY_PWD。
+// 2026-10-28 出库改造：密码不再写死在构建脚本、密钥文件不再随 git 分发。
+val keystoreProps = Properties()
+rootProject.file("local.properties").takeIf { it.exists() }
+    ?.inputStream()?.use { keystoreProps.load(it) }
 
 android {
     namespace = "com.xqdk.chess"
@@ -77,15 +84,20 @@ android {
         create("release") {
             storeFile = file("cchess.release.jks")
             keyAlias = "cchess"
-            storePassword = "cchess-store-pwd"
-            keyPassword = "cchess-key-pwd"
+            storePassword = keystoreProps.getProperty("CCHES_STORE_PWD")
+            keyPassword = keystoreProps.getProperty("CCHES_KEY_PWD")
         }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs["release"]
+            // 密钥文件与密码齐备才用 release 签名（延续既有交付签名，老用户可覆盖安装）；
+            // 缺失（CI / 全新克隆）回退 debug 签名保证可构建（对齐内阁 release=debug 签名做法）
+            val releaseCfg = signingConfigs["release"]
+            signingConfig =
+                if (releaseCfg.storeFile?.exists() == true && releaseCfg.storePassword != null) releaseCfg
+                else signingConfigs.getByName("debug")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
