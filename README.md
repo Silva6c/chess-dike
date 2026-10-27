@@ -73,6 +73,18 @@
 （该密钥库与密码在上游开源仓库中已公开，非私密凭据）。如需以你自己的身份发布，
 请替换为自有 keystore。
 
+**版本规则**：`versionCode` = git 提交数（`app/build.gradle.kts` 的 `gitVersion()`，
+无 git 环境兜底为 1）；APK 产物名 `XQDK_<日期>_<versionCode>_<变体>.apk`。
+
+## 文档
+
+| 文档 | 内容 |
+|---|---|
+| [docs/技术报告.md](docs/技术报告.md) | 架构定稿：识别管线、引擎链路、悬浮窗、测试体系 |
+| [docs/assist-helper.md](docs/assist-helper.md) | 连线功能使用说明与原理 |
+| [docs/README.md](docs/README.md) | 文档地图 |
+| [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) | 第三方组件与许可义务清单（GPL 合规） |
+
 ## 开源免费
 
 希望更多人能参与进来，一起打造一个好用的安卓Android版的中国象棋学习工具！

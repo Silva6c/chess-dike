@@ -1,0 +1,18 @@
+# 文档地图
+
+本目录只保留面向使用者的文档；开发过程文档不入仓（本地规程与工作台账由维护者自行保管）。
+
+| 文档 | 内容 |
+|---|---|
+| [../README.md](../README.md) | 项目定位、合规声明、从源码构建、大文件与签名说明 |
+| [技术报告.md](技术报告.md) | 架构定稿：连线识别管线、引擎链路、悬浮窗、对弈打谱基座、测试体系 |
+| [assist-helper.md](assist-helper.md) | 连线功能使用说明与原理 |
+| [../THIRD-PARTY-NOTICES.md](../THIRD-PARTY-NOTICES.md) | 第三方组件与许可义务清单（GPL 合规） |
+| [../LICENSE](../LICENSE) | GPL-3.0 全文 |
+| index.html / help.html / release.html | GitHub Pages 站点（首页 / 使用帮助 / 发布页） |
+| CNAME | 站点域名（沿袭上游） |
+
+## 大文件与版权物边界
+
+桔库开局库、内置棋谱书、ONNX 识别模型为第三方版权内容或大文件，**不随仓库分发**，
+获取与放置方式见 [../README.md](../README.md) 的"从源码构建"一节。
