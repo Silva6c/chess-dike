@@ -68,3 +68,21 @@ docs/推送与维护规程.md
 
 # 活页账本（本机状态文件，与 AGENTS.md 同为隐私）不入公开仓库
 /当前状态.md
+
+# ==== 内部工作资料与遗留实验材料（2026-10-28 隐私边界：公开仓只保留用户面内容）====
+# 旧开发笔记与截图、Python 实验工程（第三方 cchess 副本）、第三方棋谱格式样例
+/一些资料/
+/XQFParser/
+/棋谱/
+# 未被引用的标志图与设计源文件
+/chessfish.png
+/chessfish.psd
+# 上游遗留 Pages 站点（CNAME 指向上游域名，本镜像无站点；app 内置帮助走 assets）
+/docs/CNAME
+/docs/index.html
+/docs/help.html
+/docs/release.html
+/docs/download.php
+/docs/stylesheets/
+/docs/images/
+/docs/apk/

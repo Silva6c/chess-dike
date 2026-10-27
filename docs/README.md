@@ -9,8 +9,6 @@
 | [assist-helper.md](assist-helper.md) | 连线功能使用说明与原理 |
 | [../THIRD-PARTY-NOTICES.md](../THIRD-PARTY-NOTICES.md) | 第三方组件与许可义务清单（GPL 合规） |
 | [../LICENSE](../LICENSE) | GPL-3.0 全文 |
-| index.html / help.html / release.html | GitHub Pages 站点（首页 / 使用帮助 / 发布页） |
-| CNAME | 站点域名（沿袭上游） |
 
 ## 大文件与版权物边界
 
