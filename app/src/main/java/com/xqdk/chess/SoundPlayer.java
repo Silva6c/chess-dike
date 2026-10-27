@@ -28,55 +28,49 @@ public class SoundPlayer {
         controller = gameController;
     }
 
-    public void select() {
-        if (controller != null && controller.settings.getSound_effect()) {
-            selectSound.start();
+    /** 统一播放入口：MediaPlayer.create 可能返回 null（资源解码失败），判空防 NPE */
+    private void play(MediaPlayer player) {
+        if (player != null && controller != null && controller.settings.getSound_effect()) {
+            player.start();
         }
+    }
+
+    public void select() {
+        play(selectSound);
     }
 
     public void move() {
-        if (controller != null && controller.settings.getSound_effect()) {
-            moveSound.start();
-        }
+        play(moveSound);
     }
 
     public void capture() {
-        if (controller != null && controller.settings.getSound_effect()) {
-            captureSound.start();
-        }
+        play(captureSound);
     }
 
     public void check() {
-        if (controller != null && controller.settings.getSound_effect()) {
-            checkSound.start();
-        }
+        play(checkSound);
     }
 
     public void illegal() {
-        if (controller != null && controller.settings.getSound_effect()) {
-            invalidSound.start();
-        }
+        play(invalidSound);
     }
 
     public void checkmate() {
-        if (controller != null && controller.settings.getSound_effect()) {
-            checkmateSound.start();
-        }
+        play(checkmateSound);
     }
 
     public void ready() {
-        if (controller != null && controller.settings.getSound_effect()) {
-            readySound.start();
-        }
+        play(readySound);
     }
 
     public void release() {
-        selectSound.release();
-        moveSound.release();
-        captureSound.release();
-        checkSound.release();
-        invalidSound.release();
-        checkmateSound.release();
-        readySound.release();
+        // MediaPlayer.create 可能返回 null，逐个判空
+        if (selectSound != null) selectSound.release();
+        if (moveSound != null) moveSound.release();
+        if (captureSound != null) captureSound.release();
+        if (checkSound != null) checkSound.release();
+        if (invalidSound != null) invalidSound.release();
+        if (checkmateSound != null) checkmateSound.release();
+        if (readySound != null) readySound.release();
     }
 }

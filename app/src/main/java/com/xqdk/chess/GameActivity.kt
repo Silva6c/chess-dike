@@ -201,7 +201,8 @@ class GameActivity() : AppCompatActivity(), View.OnTouchListener, ControllerList
             }
 
             Handler(Looper.getMainLooper()).postDelayed({
-                if(controller.isComputerPlaying && controller.isAutoPlay && !controller.settings.red_go_first){
+                // isFinishing/isDestroyed 守卫：销毁后不再驱动引擎（配合 onDestroy 的 shutdownEngine）
+                if(!isFinishing && !isDestroyed && controller.isComputerPlaying && controller.isAutoPlay && !controller.settings.red_go_first){
                     controller.computerForward()
                 }
             }, 1000)
@@ -220,13 +221,26 @@ class GameActivity() : AppCompatActivity(), View.OnTouchListener, ControllerList
     fun saveThenExit() {
         // in case there is any ongoing searching task
         controller.player.stopSearch()
-        // delay 300 ms to save game status
-        Thread.sleep(100)
+        // stopSearch 为同步投递 stop 指令，无需 sleep 等待（原 Thread.sleep 冻结主线程且并不保证生效）
         if(!isFromManual){
             // 如果从打谱界面进入，不保存游戏状态
             controller.saveGameStatus();
         }
         finish()
+    }
+
+    override fun onDestroy() {
+        // 释放引擎进程与音效资源、取消在途自动走棋：此前 shutdownEngine/release 全工程
+        // 零调用，每次进出对弈页泄漏一个 pikafish 进程与 7 个 MediaPlayer，
+        // 退出后 eval 自走链还会驱动引擎后台"幽灵自弈"
+        if (::controller.isInitialized) {
+            controller.cancelAutoPlay()
+            controller.player.shutdownEngine()
+        }
+        if (::soundPlayer.isInitialized) {
+            soundPlayer.release()
+        }
+        super.onDestroy()
     }
 
     fun showInputFENDialog() {
@@ -411,7 +425,7 @@ class GameActivity() : AppCompatActivity(), View.OnTouchListener, ControllerList
             GameStatus.LOSE -> message?.let { setStatusText(it) }
             GameStatus.DRAW -> message?.let { setStatusText(it) }
             GameStatus.ENGINE -> message?.let { setStatusText(it) }
-            null -> TODO()
+            null -> Log.w("GameActivity", "onGameEvent: null status")
             GameStatus.MULTIPV -> {
                 // show message
                 message?.let { setStatusText(it) }
@@ -444,9 +458,9 @@ class GameActivity() : AppCompatActivity(), View.OnTouchListener, ControllerList
 
     // create fun to handle onbackpressed
     override fun onBackPressed() {
-        // save game to file
-        super.onBackPressed()
+        // save game to file（先保存再走 super：super 之后 Activity 可能已销毁）
         saveThenExit()
+        super.onBackPressed()
     }
 
     override fun onGameEvent(event: GameStatus?) {

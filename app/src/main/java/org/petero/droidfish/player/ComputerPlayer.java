@@ -349,8 +349,15 @@ public class ComputerPlayer {
                 if (t1 - t0 >= 1000)
                     break;
             }
-            if ((s == null) || Thread.currentThread().isInterrupted())
+            if ((s == null) || Thread.currentThread().isInterrupted()) {
+                if (s == null) {
+                    // 引擎输出流关闭 = 进程已死亡：显式走 shutdown 分支（状态置 DEAD）。
+                    // 原代码直接 return，状态卡死在 SEARCH/STOP_FOR_BESTMOVE，
+                    // 此后所有引擎功能（走棋/评估/求助）永久失效直到重启应用
+                    processEngineOutput(uci, null);
+                }
                 return;
+            }
             processEngineOutput(uci, s);
             if (Thread.currentThread().isInterrupted())
                 return;
@@ -632,8 +639,9 @@ public class ComputerPlayer {
                 int nMoves = statPV.size();
                 for (i = 0; i < nMoves; i++) {
                     Move m = new Move(null, null);
-                    m.fromUCCIString(statPV.get(i));
-                    if (m == null)
+                    // fromUCCIString 返回 false 表示非法着法串（含 "(none)"），应截断 PV；
+                    // 原代码丢弃返回值且判断 m == null（恒假），非法串被照单收进 PV
+                    if (!m.fromUCCIString(statPV.get(i)))
                         break;
                     moves.add(m);
                 }

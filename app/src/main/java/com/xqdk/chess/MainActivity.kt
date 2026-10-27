@@ -50,7 +50,11 @@ class MainActivity : AppCompatActivity() {
             insets
         }
 
-        maybeShowDisclaimer()
+        // 每次应用启动必弹；savedInstanceState 守卫：深色模式切换等配置重建时
+        // 不在同一次启动内重复弹窗（重建走恢复路径，非新启动）
+        if (savedInstanceState == null) {
+            maybeShowDisclaimer()
+        }
 
         // Bind buttons
         val buttonPlay: Button = findViewById(R.id.button_play)

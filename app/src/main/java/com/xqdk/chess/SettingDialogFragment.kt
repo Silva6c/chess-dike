@@ -18,9 +18,11 @@ class SettingDialogFragment : DialogFragment() {
         fun onDialogNegativeClick()
     }
 
-    private lateinit var settings: Settings
-    private lateinit var controller: GameController
-    private lateinit var engineInfo: String
+    // 可空而非 lateinit：DialogFragment 在进程死亡/uiMode 变更后被系统按无参构造重建，
+    // 不会重走 setController 注入路径，lateinit 直接抛 UninitializedPropertyAccessException
+    private var settings: Settings? = null
+    private var controller: GameController? = null
+    private var engineInfo: String = ""
     var listener: SettingDialogListener? = null
 
     fun setController(controller: GameController) {
@@ -33,6 +35,17 @@ class SettingDialogFragment : DialogFragment() {
     }
 
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
+        val settings = this.settings
+        val controller = this.controller
+        if (settings == null || controller == null) {
+            // 重建场景兜底：给出可关闭提示，不再崩溃
+            return AlertDialog.Builder(requireActivity())
+                .setTitle("游戏设置")
+                .setMessage("设置加载异常，请关闭后重新打开设置")
+                .setPositiveButton("确定", null)
+                .create()
+        }
+
         val builder = AlertDialog.Builder(requireActivity())
         val inflater = requireActivity().layoutInflater
         val view: View = inflater.inflate(R.layout.setting_dialog, null)
@@ -73,28 +86,26 @@ class SettingDialogFragment : DialogFragment() {
         val textviewHash = view.findViewById<TextView>(R.id.textview_hash)
 
         // set the initial values
-        if (this.settings != null) {
-            booleanOpenbook.isChecked = this.settings.openbook
-            booleanSound.isChecked = this.settings.sound_effect
-            historyInput.progress = this.settings.history_moves
-            historyText.text = this.settings.history_moves.toString()
+        booleanOpenbook.isChecked = settings.openbook
+        booleanSound.isChecked = settings.sound_effect
+        historyInput.progress = settings.history_moves
+        historyText.text = settings.history_moves.toString()
 
-            depthInput.progress = this.settings.go_depth_value
-            depthText.text = this.settings.go_depth_value.toString()
-            timeInput.progress = this.settings.go_time_value
-            timeText.text = this.settings.go_time_value.toString()
-            if (this.settings.go_depth) {
-                radioDepth.isChecked = true
-            } else if (this.settings.go_time) {
-                radioTime.isChecked = true
-            } else if (this.settings.go_infinite) {
-                radioInfinite.isChecked = true
-            }
-            redgoFirst.isChecked = this.settings.red_go_first
-            seekbarHash.progress = this.settings.hash_size
-            textviewHash.text = this.settings.hash_size.toString()
-            randomMove.isChecked = this.settings.random_move
+        depthInput.progress = settings.go_depth_value
+        depthText.text = settings.go_depth_value.toString()
+        timeInput.progress = settings.go_time_value
+        timeText.text = settings.go_time_value.toString()
+        if (settings.go_depth) {
+            radioDepth.isChecked = true
+        } else if (settings.go_time) {
+            radioTime.isChecked = true
+        } else if (settings.go_infinite) {
+            radioInfinite.isChecked = true
         }
+        redgoFirst.isChecked = settings.red_go_first
+        seekbarHash.progress = settings.hash_size
+        textviewHash.text = settings.hash_size.toString()
+        randomMove.isChecked = settings.random_move
 
         historyInput.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {

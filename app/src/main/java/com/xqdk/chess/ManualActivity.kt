@@ -60,6 +60,9 @@ class ManualActivity() : AppCompatActivity(), ControllerListener,
     // mediaplayer
     private lateinit var soundPlayer: SoundPlayer
 
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var initRunnable: Runnable? = null
+
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -102,10 +105,14 @@ class ManualActivity() : AppCompatActivity(), ControllerListener,
         // init status text
         setStatusText("未加载棋谱")
 
-        // run initManual() after delaying 500ms
-        Handler(Looper.getMainLooper()).postDelayed({
-            initManual()
-        }, 500)
+        // run initManual() after delaying 500ms；持引用以便销毁时取消（原匿名回调
+        // 在 500ms 窗口内退出 Activity 时会在已销毁窗口上 show waitingDialog 崩溃）
+        initRunnable = Runnable {
+            if (!isFinishing && !isDestroyed) {
+                initManual()
+            }
+        }
+        mainHandler.postDelayed(initRunnable!!, 500)
 
         last_selected_path = PathUtil.getInternalAppFilesDir(this,"XQF")
     }
@@ -184,6 +191,20 @@ class ManualActivity() : AppCompatActivity(), ControllerListener,
 
     fun saveThenExit() {
         finish()
+    }
+
+    override fun onDestroy() {
+        // 取消初始化回调并释放引擎/音效资源（与 GameActivity 同因：防进程与 MediaPlayer 泄漏）
+        initRunnable?.let { mainHandler.removeCallbacks(it) }
+        initRunnable = null
+        if (::controller.isInitialized) {
+            controller.cancelAutoPlay()
+            controller.player.shutdownEngine()
+        }
+        if (::soundPlayer.isInitialized) {
+            soundPlayer.release()
+        }
+        super.onDestroy()
     }
 
 
@@ -354,7 +375,7 @@ class ManualActivity() : AppCompatActivity(), ControllerListener,
             GameStatus.LOSE -> message?.let { setStatusText(it) }
             GameStatus.DRAW -> message?.let { setStatusText(it) }
             GameStatus.ENGINE -> message?.let { setStatusText(it) }
-            null -> TODO()
+            null -> Log.w("ManualActivity", "onGameEvent: null status")
             GameStatus.MULTIPV -> {
                 // show message
                 message?.let { setStatusText(it) }
@@ -446,9 +467,9 @@ class ManualActivity() : AppCompatActivity(), ControllerListener,
 
     // create fun to handle onbackpressed
     override fun onBackPressed() {
-        // save game to file
-        super.onBackPressed()
+        // 先走本类退出逻辑再 super（super 之后 Activity 可能已销毁）
         saveThenExit()
+        super.onBackPressed()
     }
 
     override fun onGameEvent(event: GameStatus?) {
