@@ -26,27 +26,41 @@ public class BHOpenBook extends OpenBookBase {
     @Override
     protected List<BookData> get(long vkey) {
         List<BookData> list = new ArrayList<>();
+        Cursor cursor = null;
         try {
             String sql = String.format("select * from bhobk where vvalid = 1 and vkey = %d order by vscore desc, vwin desc limit 5", vkey);
             Log.d("BHOpenBook", "get: " + sql);
-            Cursor cursor = db.rawQuery(sql, null);
+            cursor = db.rawQuery(sql, null);
+            // 列索引先取一次并判 -1（Lint Range：getColumnIndex 可能返回 -1）
+            int colMove = cursor.getColumnIndex("vmove");
+            int colScore = cursor.getColumnIndex("vscore");
+            int colWin = cursor.getColumnIndex("vwin");
+            int colDraw = cursor.getColumnIndex("vdraw");
+            int colLose = cursor.getColumnIndex("vlost");
+            if (colMove < 0 || colScore < 0 || colWin < 0 || colDraw < 0 || colLose < 0) {
+                Log.e("BHOpenBook", "get: unexpected book schema");
+                return list;
+            }
             // iterate result
 
             while (cursor.moveToNext()) {
                 BookData bd = new BookData();
-                int vmove = cursor.getInt(cursor.getColumnIndex("vmove"));
+                int vmove = cursor.getInt(colMove);
                 String move = Zobrist.getMoveFromVmove(vmove);
                 bd.setMove(move);
-                bd.setScore(cursor.getInt(cursor.getColumnIndex("vscore")));
-                bd.setWinRate(cursor.getDouble(cursor.getColumnIndex("vwin")));
-                bd.setDrawNum(cursor.getInt(cursor.getColumnIndex("vdraw")));
-                bd.setLoseNum(cursor.getInt(cursor.getColumnIndex("vlost")));
+                bd.setScore(cursor.getInt(colScore));
+                bd.setWinRate(cursor.getDouble(colWin));
+                bd.setDrawNum(cursor.getInt(colDraw));
+                bd.setLoseNum(cursor.getInt(colLose));
                 list.add(bd);
             }
-            cursor.close();
         } catch (Exception e) {
             Log.d("BHOpenBook", "get: " + e.getMessage());
             Log.d("BHOpenBook", "get: " + e.getStackTrace());
+        } finally {
+            if (cursor != null) {
+                cursor.close();
+            }
         }
         return list;
     }

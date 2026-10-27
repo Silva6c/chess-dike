@@ -10,10 +10,12 @@ import com.xqdk.chess.gamelogic.Move;
 import com.xqdk.chess.gamelogic.Piece;
 import com.xqdk.chess.gamelogic.Position;
 import com.xqdk.chess.gamelogic.PvInfo;
+import com.xqdk.chess.gamelogic.Rule;
 import com.xqdk.chess.manuals.XQFManual;
 import com.xqdk.chess.manuals.XQFParser;
 import com.xqdk.chess.utils.PathUtil;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -35,12 +37,8 @@ public class ManualController extends GameController{
 
     public boolean loadManualFromFile(String filename) {
         if(filename.toLowerCase().endsWith(".xqf")) {
-            InputStream inputStream = null;
-            try {
-                inputStream = new FileInputStream(new File(filename));
-                byte[] buffer = new byte[inputStream.available()];
-                inputStream.read(buffer);
-                inputStream.close();
+            try (InputStream inputStream = new FileInputStream(new File(filename))) {
+                byte[] buffer = readAll(inputStream);
 
                 // use XQFGame to parse the buffer
                 manual = XQFParser.parse(buffer);
@@ -82,10 +80,25 @@ public class ManualController extends GameController{
             } catch (IOException e) {
                 Log.e("ManualController", "Failed to load manual from file: " + filename);
                 Log.e("ManualController", e.getMessage());
+            } catch (RuntimeException e) {
+                // 损坏文件在解析深处的任何运行时异常都按"解析失败"处理，不崩溃
+                Log.e("ManualController", "Runtime error parsing XQF: " + filename, e);
+                gui.onGameEvent(GameStatus.ILLEGAL, "棋谱文件损坏或格式错误");
             }
         }
 
         return false;
+    }
+
+    /** 循环读满整个流：单次 read 不保证读满（大文件/存储层可能部分读） */
+    private static byte[] readAll(InputStream in) throws IOException {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        byte[] chunk = new byte[8192];
+        int n;
+        while ((n = in.read(chunk)) > 0) {
+            bos.write(chunk, 0, n);
+        }
+        return bos.toByteArray();
     }
 
     public void manualForward() {
@@ -106,6 +119,11 @@ public class ManualController extends GameController{
             if(moveNode != null) {
                 Move m = moveNode.move;
                 if(m != null) {
+                    // 棋谱着法落盘前做真实校验（几何+王安全），损坏棋谱不再污染盘面
+                    if (!Rule.isValidMove(m, game.currentBoard)) {
+                        gui.onGameEvent(GameStatus.ILLEGAL, "棋谱着法无效: " + m.getChsString());
+                        return;
+                    }
                     game.startPos = m.fromPosition;
                     game.endPos = m.toPosition;
                     game.movePiece();
@@ -205,6 +223,11 @@ public class ManualController extends GameController{
             if(moveNode != null) {
                 Move m = moveNode.move;
                 if(m != null) {
+                    // 棋谱着法落盘前做真实校验（几何+王安全），损坏棋谱不再污染盘面
+                    if (!Rule.isValidMove(m, game.currentBoard)) {
+                        gui.onGameEvent(GameStatus.ILLEGAL, "棋谱着法无效: " + m.getChsString());
+                        return;
+                    }
                     game.startPos = m.fromPosition;
                     game.endPos = m.toPosition;
                     game.movePiece();

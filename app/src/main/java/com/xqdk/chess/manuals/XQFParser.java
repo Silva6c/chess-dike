@@ -27,7 +27,15 @@ public class XQFParser {
     }
 
 
+    // 着法树递归深度上限：损坏文件可能让 hasNextStep/hasVarStep 一直为真，防栈溢出
+    private static final int MAX_STEP_DEPTH = 1024;
+
     static public XQFManual parse(byte[] buffer){
+        // 文件下限 = 头部 0x400 字节 + 首条棋步记录 8 字节；更短的文件必然是截断/损坏
+        if (buffer == null || buffer.length < 0x400 + 8) {
+            Log.e("XQFParser", "XQF file too small: " + (buffer == null ? -1 : buffer.length));
+            return null;
+        }
         XQFManual manual = new XQFManual();
 
         final JBBPParser headerParser = JBBPParser.prepare(
@@ -82,8 +90,9 @@ public class XQFParser {
                 return null;
             }
 
-            // version
-            manual.setVersion(szVersion[0]);
+            // version（&0xFF 取无符号：此前字节符号扩展，>=0x80 的版本号变负数
+            // 被当作 <=0x0A 的低版本走未解密分支，静默解出乱局）
+            manual.setVersion(szVersion[0] & 0xFF);
 
             // process other head fields
             manual.setTitle(readString(szTitle));
@@ -164,6 +173,10 @@ public class XQFParser {
             readSteps(stepBaseBuff, keys, manual, manual.getHeadMove());
         } catch (IOException e) {
             Log.e("XQFParser", "Error parsing header", e);
+        } catch (RuntimeException e) {
+            // 损坏文件在解析器深处的任何运行时异常（越界/IAE/NPE）都按"解析失败"处理
+            Log.e("XQFParser", "Runtime error parsing XQF", e);
+            return null;
         }
         return manual;
     }
@@ -260,6 +273,10 @@ public class XQFParser {
 
     private static String readAnnotationInfo(XQFBufferDecoder buffDecoder, int version, XQFKey keys) {
         byte[] stepInfo = buffDecoder.readBytes(4);
+        if (stepInfo.length < 4) {
+            // 截断文件：记录不足 4 字节，直接结束
+            return null;
+        }
         int annoteLen = 0;
 
         if (version <= 0x0A) {
@@ -276,8 +293,16 @@ public class XQFParser {
 
     private static void readSteps(XQFBufferDecoder buffDecoder, XQFKey keys,
                                   XQFManual manual, XQFManual.MoveNode node) {
+        readSteps(buffDecoder, keys, manual, node, 0);
+    }
+
+    private static void readSteps(XQFBufferDecoder buffDecoder, XQFKey keys,
+                                  XQFManual manual, XQFManual.MoveNode node, int depth) {
+        // 深度上限：损坏文件的"有后续"标记可能永远为真，防递归栈溢出
+        if (depth > MAX_STEP_DEPTH) return;
+
         byte[] stepInfo = buffDecoder.readBytes(4);
-        if (stepInfo.length == 0) return;
+        if (stepInfo.length < 4) return;
 
         // print stepInfo in hex format
 //        StringBuilder sb = new StringBuilder();
@@ -329,11 +354,11 @@ public class XQFParser {
         node.addNextMove(nextNode);
 
         if (hasNextStep) {
-            readSteps(buffDecoder, keys, manual, nextNode);
+            readSteps(buffDecoder, keys, manual, nextNode, depth + 1);
         }
 
         if (hasVarStep) {
-            readSteps(buffDecoder, keys, manual, node);
+            readSteps(buffDecoder, keys, manual, node, depth + 1);
         }
     }
 

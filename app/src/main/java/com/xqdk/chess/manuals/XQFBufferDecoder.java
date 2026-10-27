@@ -36,6 +36,10 @@ public class XQFBufferDecoder {
 
     public int readInt() {
         byte[] bytes = readBytes(4);
+        if (bytes.length < 4) {
+            // 截断文件：不足 4 字节此前直接数组越界；抛出由 XQFParser.parse 统一捕获判失败
+            throw new IllegalArgumentException("XQF buffer truncated (readInt)");
+        }
         int b1 = bytes[0] & 0xFF;
         int b2 = bytes[1] & 0xFF;
         int b3 = bytes[2] & 0xFF;
