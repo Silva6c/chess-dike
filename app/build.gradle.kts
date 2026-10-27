@@ -7,20 +7,15 @@ plugins {
     alias(libs.plugins.kotlin.android)
 }
 
-// https://discuss.kotlinlang.org/t/use-git-hash-as-version-number-in-build-gradle-kts/19818/2
-// this function will return the git version number, and will be used as versionCode
-fun gitVersion(): Int {
-    return try {
-        val os = org.apache.commons.io.output.ByteArrayOutputStream()
-        project.exec {
-            commandLine = "git rev-list HEAD --count".split(" ")
-            standardOutput = os
-        }
-        String(os.toByteArray()).trim().toInt()
-    } catch (e: Exception) {
-        1 // 无 git 仓库（如直接解压源码）时的兜底 versionCode
-    }
-}
+// versionCode = git 提交数（git 不可用如直接解压源码时兜底 1）。
+// 用 providers.exec 而非配置期裸 exec：配置缓存（org.gradle.configuration-cache=true）
+// 复用时它按 value source 重新求值，versionCode 不会冻结在缓存创建时的提交数。
+val gitCommitCount: Int = runCatching {
+    providers.exec {
+        commandLine("git", "rev-list", "HEAD", "--count")
+        workingDir = rootDir
+    }.standardOutput.asText.get().trim().toInt()
+}.getOrDefault(1)
 
 android {
     namespace = "com.xqdk.chess"
@@ -41,7 +36,7 @@ android {
         applicationId = "com.xqdk.chess"
         minSdk = 26
         targetSdk = 33
-        versionCode = gitVersion()
+        versionCode = gitCommitCount
         versionName = "2.9"
 
         ndk {
@@ -49,11 +44,6 @@ android {
         }
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        externalNativeBuild {
-            cmake {
-                cppFlags += ""
-            }
-        }
     }
 
     packaging {
@@ -69,13 +59,13 @@ android {
 
     flavorDimensions += "pikafish"
     productFlavors {
-        create("armv8-") {
-            //flavor configurations here
+        create("armv8") {
+            // 基础 NEON 变体（旧名 "armv8-" 的尾横杠曾让任务名与产物名出现双横杠）
             dimension = "pikafish"
             buildConfigField("String", "PIKAFISH_ENGINE_FILE", "\"libpikafish-armv8.so\"")
         }
-        create("armv8-dotprod-") {
-            //flavor configurations here
+        create("armv8-dotprod") {
+            // dotprod 变体（需 ARMv8.2+：骁龙855/麒麟990/天玑1000+）
             dimension = "pikafish"
             buildConfigField("String", "PIKAFISH_ENGINE_FILE", "\"libpikafish-armv8-dotprod.so\"")
         }
@@ -115,18 +105,20 @@ android {
             all { it.maxHeapSize = "2g" }
         }
     }
-    ndkVersion = "25.1.8937393"
 
     // https://gist.github.com/pankajXdev/574063901ada2fafa329068f41ddb076
     // Config your output file name in Gradle Kotlin DSL
     applicationVariants.all {
-        outputs.all { output ->
+        // 用 forEach 遍历输出（outputs.all{} 会解析成 Kotlin 标准库 Iterable.all 谓词，
+        // 要求 lambda 返回 Boolean——历史代码里突兀的 `true` 即由此而来）
+        outputs.forEach { output ->
             if (output is BaseVariantOutputImpl) {
                 val date = SimpleDateFormat("yyyyMMdd").format(Date())
-                val filename = "XQDK_${date}_${versionCode}_${name}.apk"
+                // 产物名显式用 flavorName-构建类型 拼接（如 armv8-dotprod-release），
+                // 不依赖 AGP 变体名——flavor 去尾横杠后变体名会变驼峰拼接（armv8-dotprodRelease）
+                val filename = "XQDK_${date}_${versionCode}_${flavorName}-${buildType.name}.apk"
                 output.outputFileName = filename
             }
-            true
         }
     }
 }
@@ -150,14 +142,14 @@ dependencies {
     // https://withme.skullzbones.com/blog/programming/execute-native-binaries-android-q-no-root/
     implementation(files("$buildDir/native-libs/native-libs.jar"))
     // YOLOv5 棋子检测推理（fp16 模型在 assets/yolov5s_xq_fp16.tflite，回退引擎）
-    implementation("org.tensorflow:tensorflow-lite:2.14.0")
+    implementation(libs.tensorflow.lite)
     // ONNX 两步式识别推理（RTMPose 角点 + Swin 分类，主力引擎；模型见 assets/models/README.md）
-    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.17.1")
-    implementation("com.readystatesoftware.sqliteasset:sqliteassethelper:+")
+    implementation(libs.onnxruntime.android)
+    implementation(libs.sqliteassethelper)
     // https://mvnrepository.com/artifact/com.igormaznitsa/jbbp
-    implementation("com.igormaznitsa:jbbp:3.0.0")
+    implementation(libs.jbbp)
     // https://github.com/PhilJay/MPAndroidChart
-    implementation("com.github.PhilJay:MPAndroidChart:v3.1.0")
+    implementation(libs.mpandroidchart)
     implementation(project(":filepicker"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
@@ -165,8 +157,7 @@ dependencies {
     implementation(libs.androidx.activity)
     implementation(libs.androidx.constraintlayout)
     testImplementation(libs.junit)
-    testImplementation("org.robolectric:robolectric:4.14.1")
-    androidTestImplementation(libs.androidx.junit)
-    androidTestImplementation(libs.androidx.espresso.core)
-    androidTestImplementation(libs.junit.jupiter)
+    testImplementation(libs.robolectric)
+    // androidTest 源集不存在（无 androidTest 目录），androidx.junit / espresso / junit-jupiter
+    // 三个 androidTestImplementation 死依赖已删；testInstrumentationRunner 保留为模板占位
 }

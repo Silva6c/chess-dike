@@ -20,7 +20,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "ChineseChess"
+rootProject.name = "chess-dike"
 include(":app")
 include(":filepicker")
 include(":tinypinyin")

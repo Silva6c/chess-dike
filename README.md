@@ -53,9 +53,9 @@
 要求：Android Studio（或 Gradle 8.x + JDK 17）+ Android SDK 34 + NDK 25。
 
 ```bash
-./gradlew :app:assembleArmv8-dotprod-Release     # 推荐：dotprod 引擎变体（需 ARMv8.2+ 真机）
-./gradlew :app:assembleArmv8-Release             # 兼容变体（不支持 dotprod 的老机器）
-./gradlew :app:testArmv8-dotprod-DebugUnitTest   # 单元测试
+./gradlew :app:assembleArmv8-dotprodRelease      # 推荐：dotprod 引擎变体（需 ARMv8.2+ 真机）
+./gradlew :app:assembleArmv8Release              # 兼容变体（不支持 dotprod 的老机器）
+./gradlew :app:testArmv8-dotprodDebugUnitTest    # 单元测试
 ```
 
 **大文件说明**（本仓库已内置/未内置）：

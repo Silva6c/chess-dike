@@ -27,7 +27,7 @@ jobs:
         cache: gradle
 
     - name: Assemble Release APKs
-      run: ./gradlew assembleArmv8-Release assembleArmv8-dotprod-Release --stacktrace
+      run: ./gradlew assembleArmv8Release assembleArmv8-dotprodRelease --stacktrace
 
     - name: Zip APKs
       run: |
