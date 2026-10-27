@@ -1,10 +1,8 @@
 package com.xqdk.chess.openbook;
 
-import java.security.SecureRandom;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Random;
 
 abstract public class OpenBookBase implements OpenBook{
 
@@ -18,41 +16,31 @@ abstract public class OpenBookBase implements OpenBook{
     }
 
     void sort(List<BookData> list, SortRule rule) {
+        // 随机规则改为"稳定排序后洗牌"：原随机比较器每次 compare 返回随机 ±1，
+        // 违反 Comparator 总序契约，候选 ≥32 时 TimSort 可抛
+        // "Comparison method violates its general contract"
         Collections.sort(list, new Comparator<BookData>() {
-            private final Random rd = new SecureRandom();
             @Override
             public int compare(BookData o1, BookData o2) {
                 switch (rule) {
-                    case BEST_SCORE: {
-                        return o1.getScore() > o2.getScore() ? -1 : (o1.getScore() < o2.getScore() ? 1 : 0);
-                    }
                     case BEST_WINRATE: {
                         return o1.getWinRate() > o2.getWinRate() ? -1 : (o1.getWinRate() < o2.getWinRate() ? 1 : 0);
                     }
-                    case FULL_RANDOM: {
-                        if (rd.nextInt(100) < 50) {
-                            return 1;
-                        } else {
-                            return -1;
-                        }
-                    }
                     case POSITIVE_RANDOM: {
-                        if (o1.getScore() > 0 && o2.getScore() > 0) {
-                            if (rd.nextInt(100) < 50) {
-                                return 1;
-                            } else {
-                                return -1;
-                            }
-                        } else {
-                            return o1.getScore() > o2.getScore() ? -1 : (o1.getScore() < o2.getScore() ? 1 : 0);
-                        }
+                        // 正分着法排前（稳定），组内随机由下方 shuffle 实现
+                        return o1.getScore() > 0 ? -1 : (o2.getScore() > 0 ? 1 : 0);
                     }
+                    case BEST_SCORE:
+                    case FULL_RANDOM:
                     default: {
-                        return 0;
+                        return o1.getScore() > o2.getScore() ? -1 : (o1.getScore() < o2.getScore() ? 1 : 0);
                     }
                 }
             }
         });
+        if (rule == SortRule.FULL_RANDOM || rule == SortRule.POSITIVE_RANDOM) {
+            Collections.shuffle(list);
+        }
     }
 
     @Override

@@ -35,8 +35,12 @@ public class PathUtil {
         }
         int start = path.lastIndexOf("/");
         int end = path.lastIndexOf(".");
-        if (start != -1 && end != -1) {
+        if (start != -1 && end != -1 && end > start) {
             return path.substring(start + 1, end);
+        }
+        if (start != -1) {
+            // 点在目录名里或无后缀（如 "/a.b/c"）：原实现 substring(start+1, end) 越界
+            return path.substring(start + 1);
         }
         return "";
     }

@@ -27,6 +27,9 @@ import com.xqdk.chess.utils.DrawableUtil;
 
 import android.graphics.Path;
 
+import java.util.ArrayList;
+import java.util.List;
+
 
 public class ChessView extends SurfaceView implements SurfaceHolder.Callback {
     public ChessViewThread thread;
@@ -133,6 +136,16 @@ public class ChessView extends SurfaceView implements SurfaceHolder.Callback {
         if(canvas == null) {
             return;
         }
+        // 渲染线程对 UI 线程可变集合做快照后再遍历（原实现直接遍历，与走子/悔棋的
+        // clear/remove 并发会 CME/越界，被渲染线程 catch 吞掉，表现为丢帧或撕裂画面）
+        final List<Position> snapPossible;
+        final List<Game.HistoryRecord> snapHistory;
+        final List<Move> snapSuggested;
+        synchronized (game.viewLock) {
+            snapPossible = new ArrayList<>(game.possibleToPositions);
+            snapHistory = new ArrayList<>(game.history);
+            snapSuggested = new ArrayList<>(game.suggestedMoves);
+        }
         // draw chess board
         canvas.drawBitmap(ChessBoardBitmap, srcBoardRect, destBoardRect, null);
 
@@ -166,13 +179,13 @@ public class ChessView extends SurfaceView implements SurfaceHolder.Callback {
             // draw all possible moves
             if(Piece.isRed(piece)) {
                 fillSrcRect(R_pot, reuseSrcRect);
-                for (Position pos : game.possibleToPositions) {
+                for (Position pos : snapPossible) {
                     fillDestRect(pos, reuseDstRect);
                     canvas.drawBitmap(R_pot, reuseSrcRect, reuseDstRect, null);
                 }
             } else if(Piece.isBlack(piece)){
                 fillSrcRect(B_pot, reuseSrcRect);
-                for (Position pos : game.possibleToPositions) {
+                for (Position pos : snapPossible) {
                     fillDestRect(pos, reuseDstRect);
                     canvas.drawBitmap(B_pot, reuseSrcRect, reuseDstRect, null);
                 }
@@ -180,17 +193,17 @@ public class ChessView extends SurfaceView implements SurfaceHolder.Callback {
         }
 
         // draw arrows for last moves
-        if(game.history.size() > 0) {
-            DrawMoveHistory(canvas);
+        if(snapHistory.size() > 0) {
+            DrawMoveHistory(canvas, snapHistory);
         }
 
         // if there are suggested moves, show them on the board
-        if(game.suggestedMoves.size() > 0) {
+        if(snapSuggested.size() > 0) {
             suggestPaint.setStyle(Paint.Style.FILL);
             suggestPaint.setAntiAlias(true);
             suggestPaint.setColor(Color.GREEN);
-            for(int i = 0; i < game.suggestedMoves.size() && i < MAX_SUGGESTED_MOVES ; i++) {
-                Move move = game.suggestedMoves.get(i);
+            for(int i = 0; i < snapSuggested.size() && i < MAX_SUGGESTED_MOVES ; i++) {
+                Move move = snapSuggested.get(i);
                 fillCoord(move.fromPosition, reuseCrdA);
                 fillCoord(move.toPosition, reuseCrdB);
                 DrawArrow(canvas, reuseCrdA, reuseCrdB, suggestPaint, ChoiceBitmaps[i]);
@@ -236,7 +249,7 @@ public class ChessView extends SurfaceView implements SurfaceHolder.Callback {
         }
     }
 
-    private void DrawMoveHistory(Canvas canvas) {
+    private void DrawMoveHistory(Canvas canvas, List<Game.HistoryRecord> snapHistory) {
         Game game = controller.game;
 
         historyPaint.setStyle(Paint.Style.FILL);
@@ -247,8 +260,8 @@ public class ChessView extends SurfaceView implements SurfaceHolder.Callback {
         if(controller!= null && controller.settings != null) {
             num_of_history_moves = controller.settings.getHistory_moves();
         }
-        for(int i = game.history.size() - 1; i >= 0 && i >= game.history.size() - num_of_history_moves; i--) {
-            Game.HistoryRecord record = game.history.get(i);
+        for(int i = snapHistory.size() - 1; i >= 0 && i >= snapHistory.size() - num_of_history_moves; i--) {
+            Game.HistoryRecord record = snapHistory.get(i);
             fillCoord(record.move.fromPosition, reuseCrdA);
             fillCoord(record.move.toPosition, reuseCrdB);
 

@@ -50,8 +50,8 @@ class BoardTracker(private val confirmCount: Int = 3) {
         UNSTABLE,
     }
 
-    /** 当前确认局面 */
-    var confirmed: RecognitionResult? = null
+    /** 当前确认局面（主线程 reset/restore 写、worker onFrame 读：补可见性） */
+    @Volatile var confirmed: RecognitionResult? = null
         private set
 
     /** 红方走子方（true=红方走）；worker 写、主线程读（悔棋/更新棋局按钮） */
@@ -71,8 +71,10 @@ class BoardTracker(private val confirmCount: Int = 3) {
     @Volatile var confirming: Boolean = false
         private set
 
-    private var candidate: RecognitionResult? = null
-    private var candidateHits = 0
+    // 主线程 reset/restore 写、worker onFrame 读：补可见性，否则 worker 可能沿用
+    // 陈旧候选确认出错误局面
+    @Volatile private var candidate: RecognitionResult? = null
+    @Volatile private var candidateHits = 0
 
     fun reset(redGoFirst: Boolean = true) {
         confirmed = null

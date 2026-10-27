@@ -154,8 +154,17 @@ class ManualActivity() : AppCompatActivity(), ControllerListener,
                     }
                 }
 
-                // copy assets to destPath
-                CopyAssetsUtil.copyAssets(this, "XQF", destPath)
+                // copy assets to destPath（assets 缺文件等异常此前直穿裸线程直接崩溃）
+                try {
+                    CopyAssetsUtil.copyAssets(this, "XQF", destPath)
+                } catch (e: Exception) {
+                    Log.e("ManualActivity", "init manuals failed", e)
+                    runOnUiThread {
+                        waitingDialog.dismiss()
+                        Toast.makeText(this, "棋谱初始化失败：${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                    return@Thread
+                }
                 runOnUiThread {
                     setFirstRunVersion(currentVersion)
                     waitingDialog.dismiss()

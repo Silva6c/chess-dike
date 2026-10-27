@@ -49,6 +49,18 @@ public class Game implements Serializable {
     // create ListArray of HistoryRecord
     public ArrayList<HistoryRecord> history = new ArrayList<>();
 
+    /**
+     * 视图集合锁：history/possibleToPositions/suggestedMoves 由 UI 线程修改、
+     * ChessView 渲染线程遍历（Draw 里快照时持同一把锁）。transient+readResolve：
+     * 对局存档反序列化后 transient 字段为 null，须重建，否则渲染线程空指针。
+     */
+    public transient Object viewLock = new Object();
+
+    private Object readResolve() {
+        viewLock = new Object();
+        return this;
+    }
+
     public Board currentBoard = null;
     public transient Move currentMove = null;
     public transient Position startPos =  null;
@@ -97,12 +109,17 @@ public class Game implements Serializable {
         // clear startPos and endPos
         startPos = null;
         endPos = null;
-        possibleToPositions.clear();
+        synchronized (viewLock) {
+            possibleToPositions.clear();
+        }
     }
 
     public HistoryRecord undoMove(){
         if(history.size() > 0){
-            HistoryRecord record = history.remove(history.size()-1);
+            HistoryRecord record;
+            synchronized (viewLock) {
+                record = history.remove(history.size()-1);
+            }
             currentBoard = new Board(record.move.board);
             clearStartPos();
             endPos = null;
@@ -154,15 +171,17 @@ public class Game implements Serializable {
 
     public boolean generateSuggestedMoves(ArrayList<PvInfo> multiPVs) {
         // process multiPV infos
-        suggestedMoves.clear();
-        for(PvInfo pvinfo : multiPVs) {
-            Move move = new Move(currentBoard);
-            ArrayList<Move> moves = pvinfo.pv;
-            if(moves.size() > 0) {
-                Move firstMove = moves.get(0);
-                move.fromPosition = firstMove.fromPosition;
-                move.toPosition = firstMove.toPosition;
-                suggestedMoves.add(move);
+        synchronized (viewLock) {
+            suggestedMoves.clear();
+            for(PvInfo pvinfo : multiPVs) {
+                Move move = new Move(currentBoard);
+                ArrayList<Move> moves = pvinfo.pv;
+                if(moves.size() > 0) {
+                    Move firstMove = moves.get(0);
+                    move.fromPosition = firstMove.fromPosition;
+                    move.toPosition = firstMove.toPosition;
+                    suggestedMoves.add(move);
+                }
             }
         }
         return true;
@@ -176,7 +195,9 @@ public class Game implements Serializable {
     }
 
     public void clearSuggestedMoves(){
-        suggestedMoves.clear();
+        synchronized (viewLock) {
+            suggestedMoves.clear();
+        }
     }
 
     public ArrayList<Move> getMoveList(){
@@ -206,7 +227,9 @@ public class Game implements Serializable {
 
     public void clearStartPos(){
         this.startPos = null;
-        this.possibleToPositions.clear();
+        synchronized (viewLock) {
+            this.possibleToPositions.clear();
+        }
     }
 
     public void saveToFile(Context context) throws IOException {

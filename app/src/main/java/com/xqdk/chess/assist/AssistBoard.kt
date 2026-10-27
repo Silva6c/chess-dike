@@ -77,9 +77,14 @@ object AssistBoard {
         var y = 0
         for (c in board) {
             when {
-                c == '/' -> { x = 0; y++ }
-                c in '0'..'9' -> { x += c - '0' }
-                else -> { p[y][x] = Piece.pieceValueMap[c] ?: Piece.EMPTY; x++ }
+                c == '/' -> { x = 0; y++; if (y >= H) return p }
+                c in '0'..'9' -> { x += c - '0'; if (x > W) return p }
+                else -> {
+                    // 公开 API 防护：畸形 FEN（行超宽/超行）此前直接数组越界
+                    if (y >= H || x >= W) return p
+                    p[y][x] = Piece.pieceValueMap[c] ?: Piece.EMPTY
+                    x++
+                }
             }
         }
         return p

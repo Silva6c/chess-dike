@@ -21,9 +21,10 @@ class HistoryAndTrendAdapter(private val context: Context, private val tableLayo
     fun update() {
         // 节流（根因 5）：GameController 每条引擎 eval 回调都发 UPDATEUI 驱动 update()，
         // 历史表 removeAllViews 逐行 inflate / 趋势图全量重建 Entry 都很重。
-        // 以"历史长度 + 当前局面分"为签名，数据未变直接跳过；悔棋/新游戏长度必变不受影响
+        // 以"历史长度 + 当前局面分"为签名，数据未变直接跳过；悔棋/新游戏长度必变不受影响。
+        // 分数用 toRawBits（原 toLong 截断取整：±1 分以内的评估变化签名不变，趋势图卡旧值）
         val sig = controller.game.history.size.toLong() * 1000003L +
-            controller.game.currentBoard.score.toLong()
+            controller.game.currentBoard.score.toRawBits()
         if (sig == lastUpdateSignature) return
         lastUpdateSignature = sig
         if(controller.isShowTrends) {

@@ -56,16 +56,16 @@ public class CopyAssetsUtil {
                 copyAssets(context, folderName + File.separator + fileName, outPath + File.separator + fileName);
             }
         } else {
-            InputStream is = context.getAssets().open(folderName);
-            FileOutputStream fos = new FileOutputStream(new File(outPath));
-            byte[] buffer = new byte[1024];
-            int byteCount = 0;
-            while ((byteCount = is.read(buffer)) != -1) {
-                fos.write(buffer, 0, byteCount);
+            // try-with-resources：原实现异常路径两个流都泄漏（close 不在 finally）
+            try (InputStream is = context.getAssets().open(folderName);
+                 FileOutputStream fos = new FileOutputStream(new File(outPath))) {
+                byte[] buffer = new byte[1024];
+                int byteCount = 0;
+                while ((byteCount = is.read(buffer)) != -1) {
+                    fos.write(buffer, 0, byteCount);
+                }
+                fos.flush();
             }
-            fos.flush();
-            is.close();
-            fos.close();
 //            Log.d("CopyAssetsUtil", "copyAssets: " + folderName + " copy is success");
         }
     }
