@@ -47,7 +47,10 @@ android {
         versionName = "2.9"
 
         ndk {
-            abiFilters += listOf("arm64-v8a", "x86_64")
+            // 只发 arm64-v8a（真机交付唯一目标；2026-10-28 用户拍板"删 ABI 减体积"，
+            // x86_64 的 onnxruntime+tflite 约 22MB/包纯为模拟器联调存在）。模拟器联调时
+            // 临时加回 "x86_64" 即可（注意：x86_64 模拟器无引擎可执行文件，对弈必失败）
+            abiFilters += listOf("arm64-v8a")
         }
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
