@@ -75,6 +75,19 @@
 注意：debug 签名的包与既有正式发布包签名不同，**不能覆盖安装**，只能卸载重装。
 如需以你自己的身份发布，请替换为自有 keystore。
 
+## 官方获取渠道与签名核验
+
+- 本项目**唯一官方发布渠道**：[github.com/Silva6c/chess-dike 的 Releases](https://github.com/Silva6c/chess-dike/releases)，
+  请只从该渠道获取更新。
+- 本项目签名密钥历史上曾随上游仓库公开（既有状态的已知事实，作者确认维持该密钥
+  以保障老用户覆盖安装升级）。因此，**任何非官方渠道分发的同签名 APK 都存在被
+  篡改后重新打包签名的风险，一律不要安装**。
+- 正式发布包的签名证书 SHA-256 指纹（`apksigner verify --print-certs <apk>` 可核验）：
+
+  ```
+  f4dbd277973ca30798b84109735c2bc976afd177f87d361bc95574e781372dee
+  ```
+
 **版本规则**：`versionCode` = git 提交数（`app/build.gradle.kts` 的 `gitVersion()`，
 无 git 环境兜底为 1）；APK 产物名 `XQDK_<日期>_<versionCode>_<变体>.apk`。
 
