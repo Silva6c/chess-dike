@@ -118,8 +118,8 @@
 - 稳定帧确认 + 轮次翻转 + 悔棋恢复（`BoardTracker.restore`）后重新同步；
 - 悬浮窗迷你棋盘渲染（Robolectric NATIVE：标准/翻转/箭头快照 + 翻转像素级断言）。
 
-运行：`./gradlew :app:testArmv8-DebugUnitTest`（或
-`./gradlew :app:testArmv8-dotprod-DebugUnitTest`）。
+运行：`./gradlew :app:testArmv8DebugUnitTest`（或
+`./gradlew :app:testArmv8-dotprodDebugUnitTest`）。
 
 ## 已知限制
 

@@ -116,6 +116,9 @@ class AssistActivity : AppCompatActivity() {
                 com.xqdk.chess.assist.AssistConfig(this).overlayTheme
             )
             val next = themeOrder[(themeOrder.indexOf(cur) + 1) % themeOrder.size]
+            // 先落盘再通知服务：service 为 null（已 CLOSE 停服、连接断开）时
+            // applyOverlayTheme 不会被调用，只改按钮文字会导致配置与显示不一致
+            com.xqdk.chess.assist.AssistConfig(this).overlayTheme = next.key
             service?.applyOverlayTheme(next)
             btnOverlayTheme.text = "④ 悬浮窗主题：" + next.label
         }

@@ -227,8 +227,13 @@ class AnalysisEngine(
         val deadline = System.currentTimeMillis() + 60000
         // bestmove 行标志结束；或因新周期 stop 导致 bestmove 立即返回
         while (System.currentTimeMillis() < deadline) {
-            // null = 引擎输出流已关闭（进程退出/关停）：立即结束，避免空转至超时
-            val line = eng.readLineFromEngine(250) ?: return
+            // null = 引擎输出流已关闭（进程退出/关停）：置引擎失效走自愈重启，
+            // 静默 return 会让 ready/engine 保持原状，外层循环永不自愈
+            val line = eng.readLineFromEngine(250) ?: run {
+                ready = false
+                engine = null
+                return
+            }
             val tokens = line.trim().split(WS)
             if (tokens.isEmpty()) continue
             if (tokens[0] == "info") {
@@ -253,7 +258,7 @@ class AnalysisEngine(
         eng.writeLineToEngine("stop")
         val dl2 = System.currentTimeMillis() + 1500
         while (System.currentTimeMillis() < dl2) {
-            val line = eng.readLineFromEngine(250) ?: return
+            val line = eng.readLineFromEngine(250) ?: break
             val tokens = line.trim().split(WS)
             if (tokens.isEmpty()) continue
             if (tokens[0] == "bestmove") {
@@ -263,6 +268,12 @@ class AnalysisEngine(
                 return
             }
         }
+        // 超时兜底仍未收 bestmove：引擎管线已失步——残留 info 行会在下一次搜索中
+        // 以新 fen 身份上屏、旧 bestmove 会让新搜索假结束。释放引擎走自愈重启，
+        // 丢弃整个管线状态，保证下一次搜索从干净的 position/go 对开始
+        runCatching { eng.shutDown() }
+        engine = null
+        ready = false
         listener.onSearchDone(AnalysisResult(fen, redGo, null,
             lines.values.sortedBy { it.multiPv }.map { it.toAnalysisLine(redGo) }))
     }

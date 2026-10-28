@@ -184,6 +184,8 @@ class ScreenAssistService : Service() {
     // ==================== 识别引擎状态机（ONNX 主力 + YOLO 回退，对齐 Cabinet）====================
     /** 当前生效引擎；worker 帧循环读写、主页经 pendingEngine 请求切换 */
     @Volatile private var engineName = ENGINE_YOLO
+    /** ONNX 加载代际计数（initEngine 递增；loader 完成时比对，过期者自行释放） */
+    @Volatile private var engineGen = 0
     /** 主页请求切换的目标引擎：worker 帧循环里应用（不在 UI 线程做重活） */
     @Volatile private var pendingEngine: String? = null
     /** ONNX 两步式识别器（模型 ~21.5MB 加载重，后台线程初始化，期间帧走跳过逻辑） */
@@ -794,14 +796,18 @@ class ScreenAssistService : Service() {
     private fun initEngine(name: String) {
         engineName = name
         if (name != ENGINE_ONNX) return
+        // 加载代际：ONNX→YOLO→ONNX 快速切换时两个 loader 都可能通过 engineName 校验，
+        // 旧 loader 会覆盖新 loader 的会话（旧者永不 release 泄漏 native 内存）；
+        // 以代际标识让过期 loader 自行释放
+        val gen = ++engineGen
         Thread {
             val eng = OnnxBoardRecognizer(assets)
             val ok = try { eng.load() } catch (t: Throwable) {
                 Log.w(TAG, "onnx load threw", t); false
             }
             synchronized(onnxEngineLock) {
-                // 期间已被切换走：释放会话（二次校验与赋值同锁，防切回 YOLO 后旧会话挂回泄漏）
-                if (engineName != ENGINE_ONNX) {
+                // 期间已被切换走或已有更新的加载批次：释放会话（二次校验与赋值同锁）
+                if (engineName != ENGINE_ONNX || gen != engineGen) {
                     eng.release()
                     return@Thread
                 }
@@ -836,7 +842,9 @@ class ScreenAssistService : Service() {
 
     private fun onBoardConfirmed() {
         val confirmed = tracker.confirmed ?: return
-        currentCanonical = confirmed.canonical
+        // 克隆快照：与 tracker 确认基线/history 锚点解耦——手动模式原地改子
+        // （onManualCellTap）不得同步改写 tracker 的确认基线与悔棋锚点
+        currentCanonical = AssistBoard.clone(confirmed.canonical)
         currentPieces = flatten(confirmed.canonical)
         currentOrientation = confirmed.orientation
         currentFen = AssistBoard.toFen(confirmed.canonical, tracker.redGo)
@@ -1131,8 +1139,11 @@ class ScreenAssistService : Service() {
             OverlayAction.CYCLE_HASH -> cycleHash()
             OverlayAction.CYCLE_ENGINE -> {
                 // 识别引擎热切换：经 pendingEngine 在 worker 帧循环应用（不在 UI 线程
-                // 释放/加载会话），切换后 tracker 重置、局面重新确认
+                // 释放/加载会话），切换后 tracker 重置、局面重新确认。
+                // 同步落盘：悬浮窗热切换不写回配置的话，重开连线页（AssistActivity
+                // onServiceConnected 按配置下发）会把热切换静默回滚
                 val want = if (engineName == ENGINE_ONNX) ENGINE_YOLO else ENGINE_ONNX
+                AssistConfig(this).recognizerEngine = want
                 setRecognizerEngine(want)
                 setStatus("切换识别引擎：${if (want == ENGINE_ONNX) "ONNX 角点式" else "YOLO 检测式"}\n切换后重新确认棋盘")
             }
@@ -1459,7 +1470,8 @@ class ScreenAssistService : Service() {
                     candidateText = (if (selectedCandidate > 0) "备选${selectedCandidate + 1} $chs" else "建议 $chs") +
                         if (suggestMature) " ✓" else "（暂定）"
                     advantageText = "${lineScoreText(line)} 深${line.depth}"
-                    advantageTone = if (line.redScoreCp >= 0) QiTone.GOOD else QiTone.BAD
+                    // 色调按我方视角（红方视角分数与我方阵营同向为 GOOD），执黑时不再红优显示"好"色
+                    advantageTone = if ((line.redScoreCp >= 0) == mySideIsRed()) QiTone.GOOD else QiTone.BAD
                     candidateIndex = selectedCandidate + 1
                     candidateCount = lines.size
                 } else if (ucci != null) {
@@ -1477,7 +1489,8 @@ class ScreenAssistService : Service() {
                     val myDesc = describeSafe(AssistBoard.applyUcci(fen, oppU), myU)
                     candidateText = "若对方走$oppDesc\n我方应$myDesc"
                     advantageText = "${lineScoreText(line)} 深${line.depth}"
-                    advantageTone = if (line.redScoreCp >= 0) QiTone.GOOD else QiTone.BAD
+                    // 色调按我方视角（红方视角分数与我方阵营同向为 GOOD），执黑时不再红优显示"好"色
+                    advantageTone = if ((line.redScoreCp >= 0) == mySideIsRed()) QiTone.GOOD else QiTone.BAD
                 }
             }
             myTurn && engineReady && fen.isNotEmpty() -> {

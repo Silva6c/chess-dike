@@ -381,6 +381,9 @@ public class ChessView extends SurfaceView implements SurfaceHolder.Callback {
     public void surfaceCreated(SurfaceHolder holder) {
         // 先停掉可能残留的旧线程（正常路径 surfaceDestroyed 已停；防御回调次序异常导致线程叠加）
         stopRenderThread();
+        // surface 重建时脏标志可能已被上一轮消费为 false：刷帧线程"无脏不绘制"，
+        // 若不重新置脏，新线程将永远不画首帧（实测：打谱页→对弈页返回后棋盘黑屏）
+        requestRender();
         this.thread = new ChessViewThread(getHolder());
         this.thread.start();
     }

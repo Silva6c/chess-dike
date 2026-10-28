@@ -56,6 +56,9 @@ class YoloBoardDetector(context: Context) {
      *
      * @param cropHint 裁剪区域（帧像素坐标 x0,y0,x1,y1）；null 表示整帧
      */
+    /** detect/close 可能来自不同线程（识别 worker 在途时主线程 onDestroy 调 close），
+     *  与 OnnxBoardRecognizer 同制式：全部 @Synchronized 串行，防 use-after-free */
+    @Synchronized
     fun detect(frame: Frame, cropHint: DoubleArray? = null): DetectionBoardMapper.MappedBoard? {
         val cx0: Int; val cy0: Int; val cw: Int; val ch: Int
         if (cropHint != null && cropHint[2] - cropHint[0] >= 64 && cropHint[3] - cropHint[1] >= 64) {
@@ -81,6 +84,7 @@ class YoloBoardDetector(context: Context) {
         return mapped
     }
 
+    @Synchronized
     fun close() {
         interpreter.close()
         square?.recycle()
