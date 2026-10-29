@@ -7,7 +7,11 @@ public class Zobrist {
 
     public static String getMoveFromVmove(int vmove) {
         int first = vmove >> 8, second = vmove & 0x00ff;
-        return coordMap.get(second) + coordMap.get(first);
+        // 损坏库行会产生坐标表外的 vmove：get 返回 null 直接拼接会产出 "nullnull"
+        // 垃圾"着法"混进候选（显示误导文案），返回空串由调用方跳过该候选
+        String tail = coordMap.get(second), head = coordMap.get(first);
+        if (tail == null || head == null) return "";
+        return tail + head;
     }
 
     public static long getZobristFromBoard(int[][] board, boolean redGo) {

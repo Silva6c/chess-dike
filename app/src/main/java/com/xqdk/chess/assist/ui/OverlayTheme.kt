@@ -67,7 +67,8 @@ enum class OverlayTheme(val key: String, val label: String, val palette: QiPalet
         actionBg = 0x1AFFFFFF, actionBgPressed = 0x29FFFFFF,
         actionStroke = 0x29FFFFFF, actionStrokePressed = 0x47FFFFFF,
         stopStroke = 0xB3FFC107.toInt(), stopStrokePressed = 0xFFFFC107.toInt(),
-        divider = 0x1AFFFFFF,
+        // 朱砂微线（美学终稿 §3.3 微调 1）：左列分隔线从白系改半透明朱砂，"一线贯局"母题呼应
+        divider = 0x80D05A44.toInt(),
     )),
 
     /** 纯黑 OLED：夜间省电档，黑底不发光（无高光渐变） */
@@ -81,7 +82,7 @@ enum class OverlayTheme(val key: String, val label: String, val palette: QiPalet
         actionBg = 0x14FFFFFF, actionBgPressed = 0x24FFFFFF,
         actionStroke = 0x24FFFFFF, actionStrokePressed = 0x3DFFFFFF,
         stopStroke = 0xB3FFC107.toInt(), stopStrokePressed = 0xFFFFC107.toInt(),
-        divider = 0x17FFFFFF,
+        divider = 0x80D05A44.toInt(),
     )),
 
     /** 浅色纸感：强光环境护眼档，文字整体加深保证对比（身后深色内容为 worst） */
@@ -95,7 +96,8 @@ enum class OverlayTheme(val key: String, val label: String, val palette: QiPalet
         actionBg = 0x14000000, actionBgPressed = 0x20000000,
         actionStroke = 0x24000000, actionStrokePressed = 0x38000000,
         stopStroke = 0xCC744500.toInt(), stopStrokePressed = 0xFF744500.toInt(),
-        divider = 0x1F000000,
+        // 浅色档朱砂取深印泥档（纸上朱砂），透明度低于深色档防抢字
+        divider = 0x66A33D32.toInt(),
     ));
 
     /** 面板背景：玻璃底 + 上沿描边 +（深色/浅色档）顶部微渐变。

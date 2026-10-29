@@ -1,9 +1,14 @@
 # 象棋迪克 XQDK -- 开源免费的安卓版中国象棋学习工具
 
+[![Build-XQDK](https://github.com/Silva6c/chess-dike/actions/workflows/android.yml/badge.svg)](https://github.com/Silva6c/chess-dike/actions/workflows/android.yml)
+[![Release](https://img.shields.io/github/v/release/Silva6c/chess-dike)](https://github.com/Silva6c/chess-dike/releases/latest)
+[![License: GPL v3](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
+![Platform](https://img.shields.io/badge/Android-8.0%2B%20(API%2026)-green)
+
 ## 介绍
 
-象棋迪克是一个开源免费的安卓版中国象棋学习工具：内置 Pikafish 引擎的完整对弈与打谱，
-以及基于 YOLO 屏幕识别的"连线"功能（识别其他象棋 App 局面并在悬浮窗给出走法建议）。
+象棋迪克是一个开源免费的安卓版中国象棋学习工具：聚焦"连线"功能——识别其他象棋 App
+的棋盘画面（ONNX 角点式 / YOLO 双引擎），在悬浮窗实时给出皮卡鱼引擎与桔库开局库的走法建议。
 
 **免责声明**：本软件（象棋迪克）为象棋学习辅助工具，仅供个人学习、复盘研究与技术交流使用。
 仅通过系统录屏授权识别画面并以悬浮窗显示走法建议，不包含自动走子、触摸注入、无障碍服务等功能；
@@ -19,7 +24,7 @@
 | | 象棋迪克（本项目） | 内阁 Cabinet |
 |---|---|---|
 | 架构 | **全离线单机**：识别、引擎、开局库都在手机上 | **双端协作**：手机识别 + 悬浮窗，电脑跑引擎，WSS 通信 |
-| 优势 | 开箱即用、零部署，随时随地打谱 / 对弈 / 连线 | 吃满电脑算力（大 Hash、多线程、完整开局库），开局库命中秒回；建议信息更丰富（胜率 / WDL / MultiPV / 算力悬浮窗直调） |
+| 优势 | 开箱即用、零部署，随时随地连线指导 | 吃满电脑算力（大 Hash、多线程、完整开局库），开局库命中秒回；建议信息更丰富（胜率 / WDL / MultiPV / 算力悬浮窗直调） |
 | 局限 | 引擎强度受手机性能封顶 | 需要一台常开的 Windows 电脑，部署与配对步骤更多 |
 | 共同原则 | 只读屏幕、悬浮窗提示；**无自动走子、无触摸注入、无障碍服务** | 同左 |
 
@@ -33,11 +38,11 @@
 - [Shirakawa-Kotone/chinese-chess-helper](https://github.com/Shirakawa-Kotone/chinese-chess-helper) ——
   两步式识别的工程实现参考（OnnxRecognizer 原实现）；
 - [Pikafish](https://github.com/official-pikafish/Pikafish) 引擎团队与
-  [DroidFish](https://github.com/peterosterlund2/droidfish)（Peter Österlund）—— 引擎与对弈框架基座（GPL-3.0）。
+  [DroidFish](https://github.com/peterosterlund2/droidfish)（Peter Österlund）—— 引擎框架基座（GPL-3.0）。
 
 ## 新增功能：连线（屏幕识别 · 悬浮窗走法指导）
 
-首页新增 **连线** 入口，功能为：通过系统录屏授权识别其他象棋 App 的棋盘局面，
+打开应用即达 **连线** 功能页，功能为：通过系统录屏授权识别其他象棋 App 的棋盘局面，
 在悬浮窗中显示**已识别局面迷你棋盘**与**我方最佳走法建议**（复用内置皮卡鱼引擎分析）。
 
 - 默认"靠近玩家的一侧（屏幕下方）＝我方"，自动识别我方执红还是执黑（含换边局），
@@ -66,14 +71,17 @@
 | Pikafish NNUE 权重（`libpikafish.nnue.so`，GPL-3.0） | ✅ 分发 | ✅ 内置 | 同上，约 45MB |
 | YOLO 棋子检测模型（`assets/yolov5n_xq_fp16.tflite`） | ✅ 分发 | ✅ 内置 | 权重来自 VinXiangQi |
 | **ONNX 识别模型**（`assets/models/*.onnx`，共约 21.5MB） | ❌ `.gitignore` 排除 | 需自行放置 | 两步式识别引擎（RTMPose 角点 + Swin 分类，模型来自 Hugging Face Chinese_Chess_Recognition）；未放置时自动回退 YOLO，见 `assets/models/README.md` |
-| **桔库开局库**（`assets/databases/*.obk.zip`） | ❌ `.gitignore` 排除 | ✅ 内置 | 第三方版权内容不入 git；缺失时对弈/连线**自动降级为纯引擎模式**，不影响使用 |
-| 内置棋谱书（`assets/XQF/`） | ❌ `.gitignore` 排除（仅留说明） | ✅ 内置 | 第三方版权内容；克隆者可自行导入 `.xqf` / `.pgn` |
+| **桔库开局库**（`assets/databases/*.obk.zip`） | ❌ `.gitignore` 排除 | ✅ 内置 | 第三方版权内容不入 git；缺失时连线**自动降级为纯引擎模式**，不影响使用 |
 
 **签名**：release 构建优先使用 `app/cchess.release.jks`（密钥文件与密码
 `CCHES_STORE_PWD` / `CCHES_KEY_PWD` 均自本地 `local.properties` 读取，**不随仓库
 分发**）；密钥或密码缺失时（CI / 全新克隆）自动回退 debug 签名，保证可构建。
 注意：debug 签名的包与既有正式发布包签名不同，**不能覆盖安装**，只能卸载重装。
 如需以你自己的身份发布，请替换为自有 keystore。
+
+**CI 自动出包**：推送 `stable-*` tag 自动触发构建（单元测试 + 双 flavor 出包），
+版权物由构建时从本仓 `assets` 预发布 Release 拉取注入并挂到同名 Release；
+本地构建则按上表自行放置大文件。
 
 ## 官方获取渠道与签名核验
 
@@ -88,7 +96,7 @@
   f4dbd277973ca30798b84109735c2bc976afd177f87d361bc95574e781372dee
   ```
 
-**版本规则**：`versionCode` = git 提交数（`app/build.gradle.kts` 的 `gitVersion()`，
+**版本规则**：`versionCode` = git 提交数（`app/build.gradle.kts` 的 `gitCommitCount`，
 无 git 环境兜底为 1）；APK 产物名 `XQDK_<日期>_<versionCode>_<变体>.apk`。
 
 ## 文档

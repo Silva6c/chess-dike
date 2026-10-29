@@ -1,9 +1,13 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Base application theme. -->
     <style name="Base.Theme.ChineseChess" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- 朱砂主色（对齐 Cabinet）：覆盖 M3 默认紫，与日间主题一致 -->
+        <!-- 朱砂主色（对齐 Cabinet）：覆盖 M3 默认紫，与日间主题一致。
+             夜间同用纸色状态栏 + 深色图标：主页/连线页固定纸底（美学终稿 §2.2，
+             悬浮窗自管换肤与主题无关），仅对话框跟随 DayNight。 -->
         <item name="colorPrimary">@color/qi_zhu_btn</item>
         <item name="colorAccent">@color/qi_zhu_btn</item>
+        <item name="android:statusBarColor">@color/xq_paper</item>
+        <item name="android:windowLightStatusBar">true</item>
     </style>
 
 </resources>

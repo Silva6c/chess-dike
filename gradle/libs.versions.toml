@@ -14,8 +14,6 @@ constraintlayout = "2.1.4"
 tflite = "2.14.0"
 onnxruntime = "1.17.1"
 sqliteAssetHelper = "2.0.1"
-jbbp = "3.0.0"
-mpAndroidChart = "v3.1.0"
 robolectric = "4.14.1"
 
 [libraries]
@@ -29,8 +27,6 @@ tensorflow-lite = { group = "org.tensorflow", name = "tensorflow-lite", version.
 onnxruntime-android = { group = "com.microsoft.onnxruntime", name = "onnxruntime-android", version.ref = "onnxruntime" }
 # 曾写 `+` 动态版本：构建不可复现，已钉死为本机实际解析到的 2.0.1
 sqliteassethelper = { group = "com.readystatesoftware.sqliteasset", name = "sqliteassethelper", version.ref = "sqliteAssetHelper" }
-jbbp = { group = "com.igormaznitsa", name = "jbbp", version.ref = "jbbp" }
-mpandroidchart = { group = "com.github.PhilJay", name = "MPAndroidChart", version.ref = "mpAndroidChart" }
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
 
 [plugins]

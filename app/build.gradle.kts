@@ -43,13 +43,17 @@ android {
         applicationId = "com.xqdk.chess"
         minSdk = 26
         targetSdk = 33
-        versionCode = gitCommitCount
-        versionName = "2.9"
+        // versionCode 地板 43（2026-10-29 稳定版压平拍板）：公开仓压成「已有 23 笔 +
+        // 单笔稳定版」后 git 提交数回落到 24，而本批真机回归包是 vc43——不加地板
+        // 会让装过 vc43 的设备判版本降级、装不上（参照内阁 coerceAtLeast 做法）。
+        // 提交数超过 43 后本行自动失效，只增不减。
+        versionCode = gitCommitCount.coerceAtLeast(43)
+        versionName = "3.0"
 
         ndk {
             // 只发 arm64-v8a（真机交付唯一目标；2026-10-28 用户拍板"删 ABI 减体积"，
             // x86_64 的 onnxruntime+tflite 约 22MB/包纯为模拟器联调存在）。模拟器联调时
-            // 临时加回 "x86_64" 即可（注意：x86_64 模拟器无引擎可执行文件，对弈必失败）
+            // 临时加回 "x86_64" 即可（注意：x86_64 模拟器无 arm64 引擎可执行文件，分析引擎必失败）
             abiFilters += listOf("arm64-v8a")
         }
 
@@ -117,6 +121,11 @@ android {
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
+            // Log.e 等 android.util 方法在纯 JVM 单测返回默认值而非抛
+            // "not mocked"——产品代码的失败路径（如 Board.restoreFromFEN 的
+            // Log.e）在 JVM 单测里也要能走到；意外依赖 Android 返回值的测试
+            // 会得到 0/null，Robolectric 用例不受影响
+            isReturnDefaultValues = true
             all { it.maxHeapSize = "2g" }
         }
     }
@@ -161,11 +170,6 @@ dependencies {
     // ONNX 两步式识别推理（RTMPose 角点 + Swin 分类，主力引擎；模型见 assets/models/README.md）
     implementation(libs.onnxruntime.android)
     implementation(libs.sqliteassethelper)
-    // https://mvnrepository.com/artifact/com.igormaznitsa/jbbp
-    implementation(libs.jbbp)
-    // https://github.com/PhilJay/MPAndroidChart
-    implementation(libs.mpandroidchart)
-    implementation(project(":filepicker"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)

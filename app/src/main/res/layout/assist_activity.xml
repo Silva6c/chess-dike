@@ -1,118 +1,383 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 背景（默认墨底+细网格）由 AssistActivity 在代码中应用 QiGridDrawable，
-     XML 兜底 qi_ink 纯色防闪 -->
+<!-- 连线工作页（美学终稿 §3.2）：纸底 + 识别点阵（全 App 唯一语义仪器面）+ 状态行 +
+     hero（待机"看穿这一局"，运行态让位实时状态文字）+ 河界线（运行态"线的呼吸"）+
+     三步授权清单（几何序号行：完成玉✓实心/待办朱砂描边/未开始灰空心）+
+     主按钮（一个动作：开始/停止识别）+ 设置两项 + 合规声明（文案语义全保留）。
+     现有交互逻辑一行不删：每秒轮询、setTextIfChanged、启动守卫、热切换、绑定补应用。 -->
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/bg_scroll"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/qi_ink"
+    android:background="@color/xq_paper"
     android:fillViewport="true">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="16dp">
+        android:paddingHorizontal="24dp"
+        android:paddingTop="20dp"
+        android:paddingBottom="28dp">
 
-        <TextView
+        <!-- 识别点阵：语义仪器面（待机墨恒静/识别中琥珀逐点/等待琥珀/异常警示红） -->
+        <com.xqdk.chess.assist.ui.AssistDotGridView
+            android:id="@+id/dot_grid"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:layout_marginTop="8dp" />
+
+        <!-- 状态行：状态点 + 短状态词（长文案截断，全量状态在悬浮窗与 hero） -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:gravity="center"
-            android:text="象棋迪克 · 连线识别指导"
-            android:textColor="#FFFFFF"
-            android:textSize="20sp"
-            android:textStyle="bold" />
+            android:layout_marginTop="20dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
 
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:text="识别其他象棋App的画面，在悬浮窗给出走法建议。\n本功能只识别、只提示，不会自动走子（无无障碍服务、无点击注入）。"
-            android:textColor="#B0BEC5"
-            android:textSize="13sp" />
+            <View
+                android:id="@+id/state_dot"
+                android:layout_width="8dp"
+                android:layout_height="8dp" />
 
+            <TextView
+                android:id="@+id/tv_auto_status"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="待授权"
+                android:textColor="@color/xq_muted"
+                android:textSize="12sp"
+                tools:ignore="HardcodedText" />
+        </LinearLayout>
+
+        <!-- hero：待机"看穿这一局"（serif），运行态由代码换成实时状态文字（sans） -->
         <TextView
+            android:id="@+id/assist_hero"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="10dp"
-            android:text="使用步骤（全自动识别）：\n① 授予悬浮窗 → ② 通知 → ③ 授权录屏并启动 → ④ 切到任意象棋 App 对局界面即可——自动找棋盘、自动识别方向，悬浮窗实时给出我方建议"
-            android:textColor="#FFCC80"
-            android:textSize="13sp" />
-
-        <TextView
-            android:id="@+id/tv_auto_status"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:gravity="center"
-            android:text="状态：尚未启动"
-            android:textColor="#90CAF9"
-            android:textSize="15sp"
+            android:fontFamily="serif"
+            android:letterSpacing="0.02"
+            android:text="@string/main_hero"
+            android:textColor="@color/xq_ink_text"
+            android:textSize="28sp"
             android:textStyle="bold" />
 
-        <Button
+        <!-- 河界线：1.5dp 朱砂，运行态进入"线的呼吸"（2.4s） -->
+        <com.xqdk.chess.assist.ui.RiverLineView
+            android:id="@+id/river_line"
+            android:layout_width="match_parent"
+            android:layout_height="1.5dp"
+            android:layout_marginTop="16dp" />
+
+        <!-- ===== 三步授权清单（①②可点，③为说明行——动作在下方主按钮） ===== -->
+
+        <LinearLayout
             android:id="@+id/btn_overlay_permission"
+            style="@style/StepRow"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="① 授予悬浮窗权限"
-            android:textSize="15sp" />
+            android:layout_marginTop="24dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground"
+            android:orientation="horizontal">
 
-        <Button
+            <TextView
+                android:id="@+id/step_overlay_num"
+                style="@style/StepNum"
+                android:tag="1"
+                android:text="1"
+                tools:ignore="HardcodedText" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="11dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/step_overlay_title"
+                    style="@style/StepTitle"
+                    android:text="悬浮窗权限"
+                    tools:ignore="HardcodedText" />
+
+                <TextView
+                    android:id="@+id/step_overlay_hint"
+                    style="@style/StepHint"
+                    android:text="用于在其他应用上方显示走法面板"
+                    tools:ignore="HardcodedText" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/step_overlay_chip"
+                style="@style/StepChip"
+                android:text="去授予"
+                tools:ignore="HardcodedText" />
+        </LinearLayout>
+
+        <LinearLayout
             android:id="@+id/btn_notification_permission"
+            style="@style/StepRow"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="② 通知权限（Android 13+）"
-            android:textSize="15sp" />
+            android:layout_marginTop="8dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground"
+            android:orientation="horizontal">
 
+            <TextView
+                android:id="@+id/step_notify_num"
+                style="@style/StepNum"
+                android:tag="2"
+                android:text="2"
+                tools:ignore="HardcodedText" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="11dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/step_notify_title"
+                    style="@style/StepTitle"
+                    android:text="通知权限"
+                    tools:ignore="HardcodedText" />
+
+                <TextView
+                    android:id="@+id/step_notify_hint"
+                    style="@style/StepHint"
+                    android:text="Android 13+ 前台服务需要"
+                    tools:ignore="HardcodedText" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/step_notify_chip"
+                style="@style/StepChip"
+                android:text="去授予"
+                tools:ignore="HardcodedText" />
+        </LinearLayout>
+
+        <!-- ③ 屏幕录制：静态说明行（录屏授权由主按钮按需拉起），运行中由代码点亮 -->
+        <LinearLayout
+            android:id="@+id/step_capture_row"
+            style="@style/StepRow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/step_capture_num"
+                style="@style/StepNum"
+                android:tag="3"
+                android:text="3"
+                tools:ignore="HardcodedText" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="11dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/step_capture_title"
+                    style="@style/StepTitle"
+                    android:text="屏幕录制"
+                    tools:ignore="HardcodedText" />
+
+                <TextView
+                    android:id="@+id/step_capture_hint"
+                    style="@style/StepHint"
+                    android:text="点击下方按钮时按需申请，全程本地处理"
+                    tools:ignore="HardcodedText" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/step_capture_chip"
+                style="@style/StepChip"
+                android:text="按需"
+                tools:ignore="HardcodedText" />
+        </LinearLayout>
+
+        <!-- 主按钮：全 App 唯一主操作"开始/停止连线"（终稿原则#1）。
+             运行态换警示描边"停止指导"（代码切换 background 资源） -->
         <Button
             android:id="@+id/btn_start_capture"
+            style="@style/MainButton"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:layout_marginTop="16dp"
+            android:text="开始屏幕识别"
+            tools:ignore="HardcodedText" />
+
+        <!-- ===== 设置（两项，与现有配置键对应） ===== -->
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="28dp"
+            android:letterSpacing="0.08"
+            android:text="设置"
+            android:textColor="@color/xq_muted"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            tools:ignore="HardcodedText" />
+
+        <!-- 悬浮窗主题：点按循环（深色玻璃→纯黑 OLED→浅色纸感），持久化键不变 -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="③ 开始屏幕识别（全自动识别棋盘）"
-            android:textSize="15sp" />
+            android:layout_marginTop="10dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
 
-        <Button
-            android:id="@+id/btn_overlay_theme"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="④ 悬浮窗主题：深色玻璃"
-            android:textSize="15sp" />
-
-        <!-- 切换识别模型（引擎）：页面是固定墨底，但主题是 DayNight——浅色系统模式下
-             RadioButton 默认 onSurface 深色文字/深色圈落在墨底上不可读（背景导致字体
-             识别不良），故字体固定白色、选中圈固定朱砂（qi_zhu 在墨底 4.5:1） -->
-        <RadioGroup
-            android:id="@+id/rg_recognizer_engine"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical">
-
-            <RadioButton
-                android:id="@+id/rb_engine_onnx"
-                android:layout_width="match_parent"
+            <TextView
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:buttonTint="@color/qi_zhu"
-                android:text="⑤ 识别引擎：ONNX 角点式（默认，泛化好）"
-                android:textColor="#FFFFFF"
-                android:textSize="14sp" />
+                android:layout_weight="1"
+                android:text="悬浮窗主题"
+                android:textColor="@color/xq_ink_text"
+                android:textSize="13sp"
+                tools:ignore="HardcodedText" />
 
-            <RadioButton
-                android:id="@+id/rb_engine_yolo"
-                android:layout_width="match_parent"
+            <Button
+                android:id="@+id/btn_overlay_theme"
+                style="@style/ValueChip"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:buttonTint="@color/qi_zhu"
-                android:text="⑤ 识别引擎：YOLO 检测式（回退）"
-                android:textColor="#FFFFFF"
-                android:textSize="14sp" />
-        </RadioGroup>
+                android:text="深色玻璃"
+                tools:ignore="HardcodedText" />
+        </LinearLayout>
 
+        <!-- 识别引擎：ONNX 角点式（默认，泛化好）/ YOLO 检测式（回退），运行中热切换。
+             RadioButton 芯片化：button=@null + 选中态描边/文字色（chip_segment 同构） -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="识别引擎"
+                android:textColor="@color/xq_ink_text"
+                android:textSize="13sp"
+                tools:ignore="HardcodedText" />
+
+            <RadioGroup
+                android:id="@+id/rg_recognizer_engine"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <RadioButton
+                    android:id="@+id/rb_engine_onnx"
+                    style="@style/EngineChip"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="ONNX 角点式"
+                    tools:ignore="HardcodedText" />
+
+                <RadioButton
+                    android:id="@+id/rb_engine_yolo"
+                    style="@style/EngineChip"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="YOLO 检测式"
+                    tools:ignore="HardcodedText" />
+            </RadioGroup>
+        </LinearLayout>
+
+        <!-- 思考制式：深度制（算到目标深度收束，建议更强）/ 时间制（固定时长收束，
+             节奏可预期）。选择后悬浮窗只显示对应制式的切换芯片（深度档或时长档） -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="思考制式"
+                android:textColor="@color/xq_ink_text"
+                android:textSize="13sp"
+                tools:ignore="HardcodedText" />
+
+            <RadioGroup
+                android:id="@+id/rg_search_mode"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <RadioButton
+                    android:id="@+id/rb_mode_depth"
+                    style="@style/EngineChip"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="深度制"
+                    tools:ignore="HardcodedText" />
+
+                <RadioButton
+                    android:id="@+id/rb_mode_time"
+                    style="@style/EngineChip"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="时间制"
+                    tools:ignore="HardcodedText" />
+            </RadioGroup>
+        </LinearLayout>
+
+        <!-- 合规声明（原段落文案语义全保留） -->
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
+            android:layout_marginTop="28dp"
+            android:lineSpacingExtra="2dp"
             android:text="合规声明：本功能仅通过系统录屏授权做画面识别并显示走法建议，属于象棋学习辅助工具，仅供学习研究，请于获取后24小时内自行删除。不包含自动走子、触摸注入、无障碍服务、Root/Xposed 或读取其他应用数据；对局中的所有着法均由玩家手动操作。"
-            android:textColor="#78909C"
-            android:textSize="11sp" />
+            android:textColor="@color/xq_muted"
+            android:textSize="11sp"
+            tools:ignore="HardcodedText" />
+
+        <!-- 底部入口：帮助（本地帮助页）/ 关于（本地对话框）——原主页文字入口迁入 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center_horizontal"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/button_help"
+                style="@style/MainTextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/main_help" />
+
+            <Button
+                android:id="@+id/button_about"
+                style="@style/MainTextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="24dp"
+                android:text="@string/main_about" />
+        </LinearLayout>
     </LinearLayout>
 </ScrollView>

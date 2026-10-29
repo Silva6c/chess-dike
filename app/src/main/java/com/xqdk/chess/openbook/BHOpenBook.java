@@ -16,6 +16,12 @@ public class BHOpenBook extends OpenBookBase {
     private BHDatabase bhDB = null;
     SQLiteDatabase db = null;
 
+    /**
+     * 【雷区·性能】构造即触发 assets 大库拷贝（桔库 .obk.zip 约 71MB，sqliteassethelper
+     * 首次 getReadableDatabase 解包到 filesDir）：在 worker 线程同步调用会卡识别管线
+     * 数秒（仅首次或版本升级后）。构造方（ScreenAssistService 惰性初始化）已把首查
+     * 放在 worker——不得挪到主线程；失败会抛异常走 openBookFailed 降级为纯引擎模式。
+     */
     public BHOpenBook(Context context){
         // database asset file is managed by BHDatabase class
         bhDB = new BHDatabase(context);

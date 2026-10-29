@@ -1,18 +1,29 @@
-# 持续集成：仅手动触发（Actions 页面 Run workflow），推送不自动构建
+# 稳定版自动构建：stable-* tag 推送触发；只有人工确认的稳定版本才推送/tag
+# （版本发布纪律），普通开发期提交留在本地，不触发任何 CI。
+# 版权物注入：桔库开局库与 ONNX 识别模型不进 git（.gitignore 版权红线），一次性
+# 上传到本仓 Release 的 assets 标签（prerelease，防污染 latest 语义），构建时经
+# gh 下载注入——缺资产时自检步失败提示上传，不产出缺件的残废包。
 name: Build-XQDK
 
 on:
-  workflow_dispatch:
+  push:
+    tags: ["stable-*"]
+  workflow_dispatch: {} # 手动补包/重跑：同样注入资产跑单测，只挂 artifact 不动 Release
 
-# 产物只作为 artifact 挂在本次运行上。2026-10-28 规范化：删除永不触发的
-# Release 发布步骤（workflow_dispatch 触发下 if: event_name == 'push' 恒假，
-# 属死逻辑）；恢复自动发布等恢复推送时另行立项。上传 artifact 无需写权限。
+permissions:
+  contents: write # tag 触发时向 Release 上传产物需要
+
+# 产物名内嵌日期（app/build.gradle.kts 用 SimpleDateFormat 取 JVM 本地时区）：
+# runner 是 UTC，不设 TZ 产物日期会比北京时间早一天（内阁 stable-20261028 首跑实录教训）
+env:
+  TZ: Asia/Shanghai
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
 
-    # versionCode = git 提交数（见 app/build.gradle.kts 的 gitCommitCount），需要完整历史
+    # versionCode = git 提交数（app/build.gradle.kts 的 gitCommitCount），需要完整历史
     - name: checkout codes
       uses: actions/checkout@v4
       with:
@@ -25,21 +36,71 @@ jobs:
         distribution: 'temurin'
         cache: gradle
 
-    # 签名出库后 CI 无 cchess.release.jks 与密码，构建自动回退 debug 签名
-    # （见 build.gradle.kts 的 release signingConfig 回退逻辑）
-    - name: Assemble Release APKs
-      run: ./gradlew assembleArmv8Release assembleArmv8-dotprodRelease --stacktrace
+    # 版权物注入：ONNX 模型文件名硬编码于 OnnxBoardRecognizer.kt，保持原名直接落
+    # models/；桔库文件名硬编码于 BHDatabase.java（桔库09.09.2023精修库.obk），
+    # assets Release 侧存 ASCII 名规避中文资源名的 URL 编码问题，此处改名落位
+    - name: 下载版权物资产注入 assets
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        mkdir -p app/src/main/assets/models app/src/main/assets/databases
+        gh release download assets --repo "$GITHUB_REPOSITORY" \
+          --pattern "*.onnx" --dir app/src/main/assets/models --clobber
+        gh release download assets --repo "$GITHUB_REPOSITORY" \
+          --pattern "XQDK-obk.zip" --dir app/src/main/assets/databases --clobber
+        mv app/src/main/assets/databases/XQDK-obk.zip \
+           "app/src/main/assets/databases/桔库09.09.2023精修库.obk.zip"
 
-    - name: Zip APKs
+    # 缺资产立即失败：降级回 YOLO/纯引擎是运行时容错设计，不是发布口径——
+    # 宁可不出包，不出缺件的残废包
+    - name: 资产自检
+      run: |
+        test -s "app/src/main/assets/models/4_v6-0301.onnx" \
+          || { echo "::error::缺少 ONNX 角点模型资产（请在 assets Release 上传 4_v6-0301.onnx）"; exit 1; }
+        test -s "app/src/main/assets/models/nano_v3-0319.onnx" \
+          || { echo "::error::缺少 ONNX 分类模型资产（请在 assets Release 上传 nano_v3-0319.onnx）"; exit 1; }
+        test -s "app/src/main/assets/databases/桔库09.09.2023精修库.obk.zip" \
+          || { echo "::error::缺少桔库开局库资产（请在 assets Release 上传 XQDK-obk.zip）"; exit 1; }
+        ls -la app/src/main/assets/models app/src/main/assets/databases
+
+    # runner 预装 SDK 未必含 compileSdk 34 与钉定的 NDK 25.1，先接受 license
+    # 让 gradle/sdkmanager 自动补装
+    - name: Accept SDK licenses
+      run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
+
+    - name: Unit tests
+      run: bash gradlew :app:testArmv8-dotprodDebugUnitTest --no-daemon --console=plain
+
+    # 签名出库后 CI 无 cchess.release.jks 与密码，构建自动回退 debug 签名
+    # （见 build.gradle.kts 的 release signingConfig 回退逻辑；debug 包不能覆盖
+    # 安装既有正式签名包，Release 正文同步提示）
+    - name: Assemble Release APKs
+      run: bash gradlew assembleArmv8Release assembleArmv8-dotprodRelease --no-daemon --console=plain
+
+    - name: Collect APKs
       run: |
         mkdir -p dist
         find app/build/outputs/apk -name "*.apk" -exec cp {} dist/ \;
-        cd dist
-        for f in *.apk; do zip "${f%.apk}.zip" "$f"; done
-        ls -l
+        ls -l dist
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
         name: XQDK-apks
-        path: dist/*.zip
+        path: dist/*.apk
+
+    # tag（stable-YYYYMMDD）触发时挂到同名 Release：没有则创建，已有则补挂资产
+    - name: Attach to Release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v2
+      with:
+        files: dist/*.apk
+        body: |
+          稳定版自动构建（tag：${{ github.ref_name }}）。versionCode = git 提交数，版本名与构建配置见 `app/build.gradle.kts`。
+
+          - `*_armv8-dotprod-release.apk`：推荐变体，需 ARMv8.2 dotprod 指令集（骁龙855 / 麒麟990 / 天玑1000 及以上）
+          - `*_armv8-release.apk`：兼容变体，供不支持 dotprod 的老机器
+
+          > **签名说明**：CI 环境无签名密钥，本页 APK 为 **debug 签名**——与既有正式签名包
+          > 签名不同，**不能覆盖安装**，需卸载重装。官方渠道与正式签名核验说明见
+          > [README](https://github.com/Silva6c/chess-dike#官方获取渠道与签名核验)。

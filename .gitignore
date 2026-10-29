@@ -60,6 +60,9 @@ docs/engineer-handoff.md
 # 本地备份目录（G 盘删除前的完整备份），绝不入公开仓库
 G-backup/
 
+# 象棋鱼上游参考克隆（zfdang/chinese-chess-fish-android，嵌套 git 仓），仅本机参考
+chess-fish/
+
 # 本文档（内部推送规程）不入公开仓库
 docs/推送与维护规程.md
 

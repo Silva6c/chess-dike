@@ -47,6 +47,18 @@ import kotlin.math.min
  * - 仅使用 MediaProjection（录屏级授权，用户主动确认）与悬浮窗权限；
  * - 不注册无障碍服务、不注入触摸、不读写其他应用数据；
  * - 识别为只读，走子由玩家手动完成。
+ *
+ * 【雷区】线程模型（全文件最高不变量，动线程前必读）：
+ * - **worker 线程（HandlerThread）**：帧回调、识别（YOLO/ONNX 全链）、桔库查库、
+ *   确认链（BoardTracker）全部串行在这一个线程——识别器缓冲复用、帧差双缓冲、
+ *   会话网格都以"单线程串行"为前提，新逻辑必须 post 到 workerHandler，
+ *   禁止另起线程并发读会话状态；
+ * - **主线程**：只做悬浮窗 add/removeView 与渲染（postRender 统一 post；
+ *   renderOverlay 的 overlayClosed 守卫是 onDestroy 幽灵窗口防线，勿删）；
+ * - **引擎线程（AnalysisEngine 单线程 executor）**：UCI 写入只发生在该线程
+ *   （stop 自查机制，见 AnalysisEngine.stopRequested 注释），外部一律只置标志；
+ * - 跨线程字段全部 @Volatile（onnxEngine/currentOrientation/manualMode 等），
+ *   写侧持锁的（onnxEngine/onnxEngineLock）读侧不得绕锁做复合操作。
  */
 class ScreenAssistService : Service() {
 
@@ -96,6 +108,25 @@ class ScreenAssistService : Service() {
 
     /** 最近一次状态文本（供连线页显示） */
     fun getStatusText(): String = lastStatusText
+
+    /** 当前识别引擎标识（连线页 onResume 回填 RadioGroup 用：悬浮窗热切换后页面
+     *  与服务无推送通道，不回填则单选显示与实际引擎相反，点选反而触发真切换） */
+    fun getRecognizerEngine(): String = engineName
+
+    /**
+     * 停止指导（美学终稿原则#1"一个动作"：连线页主按钮运行态"停止指导"与悬浮窗
+     * "关闭"共用此路径）：停止录屏、移除面板、停止指导，之后可在连线页重新授权启动
+     * （startCapture 会复位会话态，重启即恢复）。主线程调用（原 CLOSE 按钮路径）。
+     */
+    fun stopGuidance() {
+        overlayClosed = true
+        overlayPanel?.let { p -> runCatching { windowManager?.removeView(p) } }
+        overlayPanel = null
+        paused = true
+        releaseCapture()
+        setStatus("已关闭（识别与录屏均已停止，可在连线页重新启动）")
+        stopSelf()
+    }
 
     /**
      * 延迟初始化：服务构造时 Context 尚未 attach（mBase==null），
@@ -189,7 +220,8 @@ class ScreenAssistService : Service() {
     /** 主页请求切换的目标引擎：worker 帧循环里应用（不在 UI 线程做重活） */
     @Volatile private var pendingEngine: String? = null
     /** ONNX 两步式识别器（模型 ~21.5MB 加载重，后台线程初始化，期间帧走跳过逻辑） */
-    private var onnxEngine: OnnxBoardRecognizer? = null
+    // @Volatile：写侧持 onnxEngineLock，读侧（handleFrameOnnx 跳帧判断）无锁
+    @Volatile private var onnxEngine: OnnxBoardRecognizer? = null
     /** onnxEngine 的赋值/释放锁：后台加载线程与 switchEngine 并发，无锁会泄漏 native 会话 */
     private val onnxEngineLock = Any()
     /** 连续产出结构非法局面的帧数（走子动画过渡帧常客）：连续 3 帧强制角点重定位 */
@@ -215,7 +247,8 @@ class ScreenAssistService : Service() {
     @Volatile private var currentPieces: IntArray? = null
     /** 当前确认局面的 canonical 棋盘（开局库查询用） */
     @Volatile private var currentCanonical: Array<IntArray>? = null
-    private var currentOrientation = Orientation.STANDARD
+    // @Volatile：worker 写、主线程渲染读（陈旧朝向仅瞬时自愈，加栅栏一劳永逸）
+    @Volatile private var currentOrientation = Orientation.STANDARD
     @Volatile private var lastAnalysis: AnalysisResult? = null
     @Volatile private var selectedCandidate = 0
 
@@ -229,14 +262,22 @@ class ScreenAssistService : Service() {
     private class HistoryEntry(val result: RecognitionResult, val redGo: Boolean, val fen: String)
     private val history = ArrayDeque<HistoryEntry>()
 
-    /** 引擎强度档位（固定深度，与对弈"固定深度"制式一致） */
+    /** 引擎强度档位（固定深度，与深度制搜索一致） */
     private val strengthLevels = listOf("快速·深度12" to 12, "标准·深度20" to 20, "强劲·深度24" to 24)
     @Volatile private var strengthIndex = 0
-    /** 引擎 Hash 档位（与对弈设置同口径）：从 256 起步循环 */
+    /** 引擎 Hash 档位（与搜索设置同口径）：从 256 起步循环 */
     private val hashLevels = listOf(256, 512, 1024, 2048)
     @Volatile private var hashIndex = 0
     /** 引擎变招路数（MultiPV 1-3，悬浮窗左列"变招档"按钮循环；1 路算力最全） */
     @Volatile private var multiPv: Int = 3
+    /** 时间制时长档位（时间制"时间"芯片循环；与 AnalysisEngine 的 500-30000ms 界一致） */
+    private val timeLevels = listOf("1秒" to 1000, "2秒" to 2000, "3秒" to 3000, "5秒" to 5000, "10秒" to 10000, "30秒" to 30000)
+    @Volatile private var timeIndex = 2
+    /**
+     * 当前思考制式（true=时间制）：悬浮窗深度/时间芯片二选一显示的依据。
+     * 只在 onCreate / createEngine / 连线页 setSearchMode 三处写，其余只读。
+     */
+    @Volatile private var searchModeIsTime = false
 
     private var windowManager: WindowManager? = null
     private var overlayPanel: OverlayPanelView? = null
@@ -247,14 +288,23 @@ class ScreenAssistService : Service() {
     override fun onCreate() {
         super.onCreate()
         tracker = BoardTracker(config.confirmCount)
-        // 强度档位与持久化设置对齐（设置值不在档位表内时用”标准”）
+        // 强度档位与持久化设置对齐（设置值不在档位表内时用"标准"）；
+        // 脏值（旧版本遗留/adb 手改）写回默认档——不写回则芯片显示档位与引擎
+        // 实际搜索参数脱钩（显示"深度 20"实际按遗留值跑）
         val idx = strengthLevels.indexOfFirst { it.second == config.searchDepth }
         strengthIndex = if (idx >= 0) idx else 1
+        if (idx < 0) config.searchDepth = strengthLevels[1].second
         // Hash 档位与持久化设置对齐（从 256 起步循环）
         val hidx = hashLevels.indexOfFirst { it == config.hashMb }
         hashIndex = if (hidx >= 0) hidx else 0
+        if (hidx < 0) config.hashMb = hashLevels[0]
         // 变招路数与持久化设置对齐（1-3；1 路算力最全，默认 3 保留候选展示）
         multiPv = config.multiPv
+        // 思考制式与时间档位对齐持久化配置（不在表内取默认 3 秒档并写回）
+        searchModeIsTime = config.searchMode == "time"
+        val tidx = timeLevels.indexOfFirst { it.second == config.searchTimeMs }
+        timeIndex = if (tidx >= 0) tidx else 2
+        if (tidx < 0) config.searchTimeMs = timeLevels[2].second
         // YOLO 棋子检测：直接检测 14 类棋子 + 棋盘框，免校准、跨 App 泛化。
         // 初始化失败（含 JVM 测试环境无 TFLite 原生库的 UnsatisfiedLinkError）只提示，不阻塞服务
         yoloDetector = try {
@@ -305,7 +355,9 @@ class ScreenAssistService : Service() {
         val pi = PendingIntent.getActivity(
             this, 0,
             Intent(this, com.xqdk.chess.assist.ui.AssistActivity::class.java),
-            PendingIntent.FLAG_IMMUTABLE
+            // UPDATE_CURRENT：通知随状态文本重复构建，intent 不可变但描述需可覆盖；
+            // 配合 launcher 页 singleTask，点通知回到既有实例而非叠加双实例
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
         return Notification.Builder(this, CHANNEL_ID)
             .setContentTitle("象棋迪克·连线识别运行中")
@@ -323,6 +375,14 @@ class ScreenAssistService : Service() {
         // 重新启动时允许再次显示悬浮窗
         overlayClosed = false
         paused = false
+        // 会话态复位：CLOSE 后重新授权是新会话——旧会话的手动模式（拦截识别，不复位则
+        // 重启后识别永不工作）、旧裁剪网格与计数（首帧自愈噪声）不能带入
+        manualMode = false
+        sessionGrid = null
+        invalidStreak = 0
+        recMissStreak = 0
+        cropUnstableStreak = 0
+        onnxLastCostMs = 0
         val metrics = screenMetrics()
         val w = metrics.widthPixels
         val h = metrics.heightPixels
@@ -353,8 +413,15 @@ class ScreenAssistService : Service() {
         // 重建前先关停旧引擎：CLOSE 后服务仍被连线页绑定存活，重新授权走这里时
         // 直接覆盖引用会泄漏旧 pikafish 进程与 analysis-engine 线程（wait 循环永不退出）
         analysisEngine?.shutdown()
-        analysisEngine = AnalysisEngine(this, analysisListener, config.searchDepth, config.multiPv)
-            .also { it.setHash(config.hashMb); it.start() }
+        analysisEngine = AnalysisEngine(
+            this, analysisListener, config.searchDepth, config.multiPv,
+            searchMode = if (config.searchMode == "time") AnalysisEngine.SearchMode.TIME
+            else AnalysisEngine.SearchMode.DEPTH,
+            searchTimeMs = config.searchTimeMs)
+            .also {
+                searchModeIsTime = config.searchMode == "time"
+                it.setHash(config.hashMb); it.start()
+            }
         postRender()
     }
 
@@ -801,7 +868,9 @@ class ScreenAssistService : Service() {
         // 以代际标识让过期 loader 自行释放
         val gen = ++engineGen
         Thread {
-            val eng = OnnxBoardRecognizer(assets)
+            // profiling 由 AssistConfig.benchProfiling 控制（诊断开关，adb 改
+            // shared_prefs 即可开，免改代码重编译）
+            val eng = OnnxBoardRecognizer(assets, profiling = config.benchProfiling)
             val ok = try { eng.load() } catch (t: Throwable) {
                 Log.w(TAG, "onnx load threw", t); false
             }
@@ -1105,13 +1174,7 @@ class ScreenAssistService : Service() {
             }
             OverlayAction.CLOSE -> {
                 // 关闭悬浮窗：停止录屏、移除面板、停止指导（与录制耦合，之后可在连线页重新授权启动）
-                overlayClosed = true
-                overlayPanel?.let { p -> runCatching { windowManager?.removeView(p) } }
-                overlayPanel = null
-                paused = true
-                releaseCapture()
-                setStatus("已关闭（识别与录屏均已停止，可在连线页重新启动）")
-                stopSelf()
+                stopGuidance()
             }
             OverlayAction.CYCLE_CANDIDATE -> {
                 val n = maxOf(bookMoves?.size ?: 0, lastAnalysis?.lines?.size ?: 0)
@@ -1136,6 +1199,7 @@ class ScreenAssistService : Service() {
                 setStatus("棋局已更新\n现${if (tracker.redGo == mySideIsRed()) "轮到我方走" else "轮到对方走"}")
             }
             OverlayAction.CYCLE_STRENGTH -> cycleStrength()
+            OverlayAction.CYCLE_TIME -> cycleTime()
             OverlayAction.CYCLE_HASH -> cycleHash()
             OverlayAction.CYCLE_ENGINE -> {
                 // 识别引擎热切换：经 pendingEngine 在 worker 帧循环应用（不在 UI 线程
@@ -1148,6 +1212,13 @@ class ScreenAssistService : Service() {
                 setStatus("切换识别引擎：${if (want == ENGINE_ONNX) "ONNX 角点式" else "YOLO 检测式"}\n切换后重新确认棋盘")
             }
             OverlayAction.CYCLE_MULTIPV -> cycleMultiPv()
+            OverlayAction.FLASH_STOP -> {
+                // 闪电出着：引擎思考中打断并立即采纳当前最优；空闲/新局面排队中为 no-op，
+                // 按实际结果提示（无脑提示"已出着"会误导用户等待一个不会来的 bestmove）
+                val flashed = analysisEngine?.flashStop() == true
+                setStatus(if (flashed) "闪电出着：已打断搜索，采纳当前最优"
+                else "闪电出着：当前没有思考中的搜索")
+            }
         }
     }
 
@@ -1199,8 +1270,14 @@ class ScreenAssistService : Service() {
             if (canonical != null && history.lastOrNull()?.fen != currentFen) {
                 pushManualHistory(canonical, tracker.redGo)
             }
+            // 进入即调度一次分析：识别从未成功时以种子局面进手动模式，不调度则
+            // 悬浮窗停在"轮到我方走"无建议，直到用户首次手工操作
+            scheduleAnalysis()
             setStatus("手动模式（再点手动退出）\n点子选中→点目标格=走子\n再点选中子=删除\n『更新棋局』纠正轮次")
         } else {
+            // 退出即恢复自动识别：先"停止"（paused）再进手动编辑的用户，不复位则
+            // 帧识别仍被 paused 门闩拦住，下面的承诺落空（悬浮窗永远停在旧局面）
+            paused = false
             setStatus("已退出手动模式\n恢复自动识别")
         }
         postRender()
@@ -1239,6 +1316,13 @@ class ScreenAssistService : Service() {
             postRender()
             return
         }
+        // 目标格为己方子：实战着法不存在——静默录入会产出"吃掉己子"的少子无规则局面
+        // 直接喂引擎（validate 只查数量上限与照面，拦不住）
+        if (board[y][x] != Piece.EMPTY && Piece.isRed(board[y][x]) == Piece.isRed(moving)) {
+            setStatus("手动模式\n目标格是己方子，不能走")
+            postRender()
+            return
+        }
         board[sel.second][sel.first] = Piece.EMPTY
         board[y][x] = moving
         applyManualBoard(board, flipTurn = true)
@@ -1268,7 +1352,7 @@ class ScreenAssistService : Service() {
         scheduleAnalysis()
     }
 
-    /** 引擎强度：固定深度三档循环（对弈同款制式），持久化并对下一次搜索生效 */
+    /** 引擎强度：固定深度三档循环（同款制式），持久化并对下一次搜索生效 */
     private fun cycleStrength() {
         strengthIndex = (strengthIndex + 1) % strengthLevels.size
         val (name, depth) = strengthLevels[strengthIndex]
@@ -1286,6 +1370,30 @@ class ScreenAssistService : Service() {
         analysisEngine?.setHash(mb)
         postRender()
         setStatus("引擎 Hash：${mb}MB")
+    }
+
+    /** 时间制时长档位循环（1→2→3→5→10→30 秒），持久化并对下一次搜索生效 */
+    private fun cycleTime() {
+        timeIndex = (timeIndex + 1) % timeLevels.size
+        val (name, ms) = timeLevels[timeIndex]
+        config.searchTimeMs = ms
+        analysisEngine?.setSearchMode(AnalysisEngine.SearchMode.TIME, ms)
+        postRender()
+        setStatus("思考时长：$name")
+    }
+
+    /**
+     * 连线页切换思考制式（深度制/时间制）：热更新引擎 + 刷新悬浮窗芯片——
+     * 悬浮窗深度/时间芯片按本标记二选一显示（OverlayModel 的 depthText/timeText 互斥）。
+     * 调用线程主线程（AssistActivity 监听），volatile 写 + postRender 均线程安全。
+     */
+    fun setSearchMode(isTime: Boolean) {
+        searchModeIsTime = isTime
+        config.searchMode = if (isTime) "time" else "depth"
+        analysisEngine?.setSearchMode(
+            if (isTime) AnalysisEngine.SearchMode.TIME else AnalysisEngine.SearchMode.DEPTH,
+            config.searchTimeMs)
+        postRender()
     }
 
     /**
@@ -1329,6 +1437,10 @@ class ScreenAssistService : Service() {
 
     /** 通知栏只在新状态文本变化时 notify（根因 10：原来每次 setStatus 都刷通知栏） */
     private fun notifyStatusChanged(text: String) {
+        // 僵尸通知守卫：onDestroy 先 stopForeground 移除通知再 quitSafely（不等待队列
+        // 清空），worker 在途回调仍可能 setStatus 重新 notify——挂出服务已死却不可
+        // 滑动清除的 ongoing 通知。与 renderOverlay/onEngineError 的守卫同口径。
+        if (overlayClosed) return
         if (text == lastNotifiedText) return
         lastNotifiedText = text
         runCatching {
@@ -1474,6 +1586,10 @@ class ScreenAssistService : Service() {
                     advantageTone = if ((line.redScoreCp >= 0) == mySideIsRed()) QiTone.GOOD else QiTone.BAD
                     candidateIndex = selectedCandidate + 1
                     candidateCount = lines.size
+                } else if (ucci == "(none)") {
+                    // 困毙/无着可走：引擎合法返回 (none)，不是识别错误
+                    candidateText = "无可用着法\n（困毙或已无着可走）"
+                    candidateTone = QiTone.WARN
                 } else if (ucci != null) {
                     candidateText = "轮次可能识别有误\n走一步后自动纠正"
                     candidateTone = QiTone.WARN
@@ -1519,7 +1635,9 @@ class ScreenAssistService : Service() {
             paused = paused,
             manualMode = manualMode,
             selectedCell = manualSelected,
-            depthText = strengthLevels[strengthIndex].second.toString(),
+            // 思考制式决定深度/时间芯片二选一（互斥：非当前制式的档值为 null → 芯片隐藏）
+            depthText = if (!searchModeIsTime) strengthLevels[strengthIndex].second.toString() else null,
+            timeText = if (searchModeIsTime) timeLevels[timeIndex].second.let { "${it / 1000}s" } else null,
             hashText = hashLevels[hashIndex].toString(),
             engineText = if (engineName == ENGINE_ONNX) "ONNX" else "YOLO",
             multiPv = multiPv,
@@ -1543,6 +1661,10 @@ class ScreenAssistService : Service() {
 
     override fun onDestroy() {
         Log.i(TAG, "service destroyed")
+        // 幽灵窗口守卫：销毁后 cleanup 与在途回调（引擎 onSearchDone/worker setStatus →
+        // postRender）存在竞态，renderOverlay 见 overlayClosed=false 会重新 addView+重发
+        // 通知——服务已死窗口却挂在屏上。置位后 renderOverlay 直接放弃渲染。
+        overlayClosed = true
         releaseCapture()
         // 先清主线程在途回调（渲染/节流补绘）：否则残留的 renderOverlay 可能重新 addView
         mainHandler.removeCallbacksAndMessages(null)
@@ -1551,8 +1673,12 @@ class ScreenAssistService : Service() {
         workerThread.quitSafely()
         yoloDetector?.close()
         yoloDetector = null
-        onnxEngine?.release()
-        onnxEngine = null
+        // 与 loader 线程同锁：loader 在 synchronized(onnxEngineLock) 内赋值 onnxEngine，
+        // 裸读裸释放会漏掉"release 之后 loader 才完成赋值"的时序 → 21.5MB native 会话泄漏
+        synchronized(onnxEngineLock) {
+            onnxEngine?.release()
+            onnxEngine = null
+        }
         analysisEngine?.shutdown()
         analysisEngine = null
         overlayPanel?.let { p ->

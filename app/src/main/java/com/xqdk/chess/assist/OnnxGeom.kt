@@ -190,15 +190,21 @@ object OnnxGeom {
         return out
     }
 
-    /** 复用输出缓冲版 [warpPerspective]：识别热路径用，dst 长度须为 outW*outH */
+    /** 复用输出缓冲版 [warpPerspective]：识别热路径用，dst 长度须为 outW*outH。
+     *  性能注记（450×500 每帧 22.5 万像素）：行内 dy 项预乘出循环，除法从每像素
+     *  两次并为一次求倒数 + 两次乘法（除法比乘法贵一个量级）；恒等变换（den=1）
+     *  下与原实现 bit 级一致，一般情形坐标误差 ≤1ulp，采样值在近似断言容差内 */
     fun warpPerspectiveInto(px: IntArray, w: Int, h: Int, h33: DoubleArray, outW: Int, outH: Int, dst: IntArray) {
         val inv = invertHomography(h33)
         var o = 0
         for (dy in 0 until outH) {
+            val rowX = inv[1] * dy + inv[2]
+            val rowY = inv[4] * dy + inv[5]
+            val rowW = inv[7] * dy + inv[8]
             for (dx in 0 until outW) {
-                val den = inv[6] * dx + inv[7] * dy + inv[8]
-                val sx = ((inv[0] * dx + inv[1] * dy + inv[2]) / den).toFloat()
-                val sy = ((inv[3] * dx + inv[4] * dy + inv[5]) / den).toFloat()
+                val invDen = 1.0 / (inv[6] * dx + rowW)
+                val sx = ((inv[0] * dx + rowX) * invDen).toFloat()
+                val sy = ((inv[3] * dx + rowY) * invDen).toFloat()
                 dst[o++] = sampleBilinearZero(px, w, h, sx, sy)
             }
         }
@@ -211,15 +217,17 @@ object OnnxGeom {
         return out
     }
 
-    /** 复用输出缓冲版 [resizeBilinear]：识别热路径用，dst 长度须为 dw*dh */
+    /** 复用输出缓冲版 [resizeBilinear]：识别热路径用，dst 长度须为 dw*dh。
+     *  性能注记：x 映射查表（同表达式每输出列只算一次，280×315 每帧省 8.7 万次
+     *  double 乘加），与逐像素计算 bit 级一致 */
     fun resizeBilinearInto(px: IntArray, sw: Int, sh: Int, dw: Int, dh: Int, dst: IntArray) {
         val sxScale = sw.toDouble() / dw
         val syScale = sh.toDouble() / dh
+        val sxTable = DoubleArray(dw) { (it + 0.5) * sxScale - 0.5 }
         for (dy in 0 until dh) {
             val sy = ((dy + 0.5) * syScale - 0.5).toFloat()
             for (dx in 0 until dw) {
-                val sx = ((dx + 0.5) * sxScale - 0.5).toFloat()
-                dst[dy * dw + dx] = sampleBilinearClamp(px, sw, sh, sx, sy)
+                dst[dy * dw + dx] = sampleBilinearClamp(px, sw, sh, sxTable[dx].toFloat(), sy)
             }
         }
     }

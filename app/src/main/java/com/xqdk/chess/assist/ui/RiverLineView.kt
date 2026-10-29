@@ -1,0 +1,94 @@
+package com.xqdk.chess.assist.ui
+
+import android.animation.ValueAnimator
+import android.content.Context
+import android.graphics.Canvas
+import android.graphics.LinearGradient
+import android.graphics.Matrix
+import android.graphics.Paint
+import android.graphics.Shader
+import android.util.AttributeSet
+import android.view.View
+import android.view.animation.LinearInterpolator
+import androidx.core.content.ContextCompat
+import com.xqdk.chess.R
+
+/**
+ * 河界线（美学终稿 §2.3 动效一"线的呼吸"）：1.5dp 朱砂横线。
+ * 静态 = 纯色朱砂；运行态 = [setBreathing](true) 启动 2.4s 线性无限循环，
+ * 亮段（#D97057，视觉稿 breath 关键帧色）沿 240% 渐变域平移，REPEAT 平铺保证循环无缝。
+ * 动效预算纪律：本动画仅运行态出现，静止即停。
+ */
+class RiverLineView @JvmOverloads constructor(
+    context: Context,
+    attrs: AttributeSet? = null,
+) : View(context, attrs) {
+
+    companion object {
+        /** 呼吸周期（毫秒，终稿 §2.3"线的呼吸 2.4s"） */
+        private const val PERIOD_MS = 2400L
+        /** 渐变域宽度 = 视图宽 × 2.4（对齐视觉稿 background-size:240%） */
+        private const val DOMAIN_SCALE = 2.4f
+        /** 呼吸亮峰色（视觉稿高亮段 #D97057） */
+        private const val ZHU_BRIGHT = 0xFFD97057.toInt()
+    }
+
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = ContextCompat.getColor(context, R.color.xq_zhu)
+    }
+    private val shaderMatrix = Matrix()
+    private var animator: ValueAnimator? = null
+    private var breathing = false
+
+    /** 切换呼吸态；同态重复调用零开销（1s 轮询安全） */
+    fun setBreathing(enable: Boolean) {
+        if (enable == breathing) return
+        breathing = enable
+        if (enable) {
+            paint.shader = buildShader()
+            ensureAnimator().start()
+        } else {
+            animator?.cancel()
+            paint.shader = null
+            invalidate()
+        }
+    }
+
+    private fun buildShader(): LinearGradient = LinearGradient(
+        0f, 0f, width * DOMAIN_SCALE, 0f,
+        intArrayOf(paint.color, paint.color, ZHU_BRIGHT, paint.color, paint.color),
+        floatArrayOf(0f, 0.4f, 0.5f, 0.6f, 1f),
+        Shader.TileMode.REPEAT,
+    )
+
+    private fun ensureAnimator(): ValueAnimator {
+        animator?.let { return it }
+        return ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = PERIOD_MS
+            interpolator = LinearInterpolator()
+            repeatCount = ValueAnimator.INFINITE
+            addUpdateListener { invalidate() }
+            animator = this
+        }
+    }
+
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        // 宽度变化后渐变域随之重建（呼吸进行中才需要）
+        if (breathing) paint.shader = buildShader()
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        if (breathing && paint.shader != null) {
+            val shift = (animator?.animatedFraction ?: 0f) * width * DOMAIN_SCALE
+            shaderMatrix.setTranslate(-shift, 0f)
+            paint.shader.setLocalMatrix(shaderMatrix)
+        }
+        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
+    }
+
+    override fun onDetachedFromWindow() {
+        animator?.cancel()
+        super.onDetachedFromWindow()
+    }
+}

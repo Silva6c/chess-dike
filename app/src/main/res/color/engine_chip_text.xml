@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 识别引擎芯片文字色：选中朱砂、未选次级灰绿（美学终稿 vchip.on 语义） -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_checked="true" android:color="@color/xq_zhu" />
+    <item android:color="@color/xq_muted" />
+</selector>

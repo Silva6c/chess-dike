@@ -4,6 +4,10 @@
         <!-- 朱砂主色（对齐 Cabinet）：覆盖 M3 默认紫，对话框按钮/图标 tint 全局生效 -->
         <item name="colorPrimary">@color/qi_zhu_btn</item>
         <item name="colorAccent">@color/qi_zhu_btn</item>
+        <!-- 纸档页面（美学终稿 §2.2）：页面固定宣纸底、不随系统深色模式，
+             状态栏同纸色 + 深色图标（夜间主题同款——页面纸底与昼夜无关） -->
+        <item name="android:statusBarColor">@color/xq_paper</item>
+        <item name="android:windowLightStatusBar">true</item>
     </style>
 
     <style name="Theme.ChineseChess" parent="Base.Theme.ChineseChess" />

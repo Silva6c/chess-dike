@@ -45,7 +45,7 @@ class AssistConfig(context: Context) {
         get() = sp.getInt(KEY_SEARCH_DEPTH, 20)
         set(value) { sp.edit().putInt(KEY_SEARCH_DEPTH, value.coerceIn(6, 40)).apply() }
 
-    /** 引擎 Hash（MB，与对弈设置同口径；面板按钮循环 256→512→1024→2048） */
+    /** 引擎 Hash（MB，与搜索设置同口径；面板按钮循环 256→512→1024→2048） */
     var hashMb: Int
         get() = sp.getInt(KEY_HASH_MB, 256)
         set(value) { sp.edit().putInt(KEY_HASH_MB, value).apply() }
@@ -58,10 +58,32 @@ class AssistConfig(context: Context) {
         get() = sp.getInt(KEY_MULTI_PV, 3).coerceIn(1, 3)
         set(value) { sp.edit().putInt(KEY_MULTI_PV, value.coerceIn(1, 3)).apply() }
 
+    /**
+     * 思考制式（象棋鱼"按深度思考/按时间思考"的连线映射）："depth"（默认，建议更强）
+     * 或 "time"（固定时长收束，节奏可预期，快棋友好）。
+     */
+    var searchMode: String
+        get() = sp.getString(KEY_SEARCH_MODE, "depth") ?: "depth"
+        set(value) { sp.edit().putString(KEY_SEARCH_MODE, value).apply() }
+
+    /** 时间制搜索时长 ms（500-30000，默认 3000；仅 searchMode="time" 时生效） */
+    var searchTimeMs: Int
+        get() = sp.getInt(KEY_SEARCH_TIME_MS, 3000).coerceIn(500, 30000)
+        set(value) { sp.edit().putInt(KEY_SEARCH_TIME_MS, value).apply() }
+
     /** 悬浮窗主题（OverlayTheme.key：深色玻璃/纯黑 OLED/浅色纸感，连线页切换） */
     var overlayTheme: String
         get() = sp.getString(KEY_OVERLAY_THEME, null) ?: OverlayTheme.DARK.key
         set(value) { sp.edit().putString(KEY_OVERLAY_THEME, value).apply() }
+
+    /**
+     * 识别引擎分段计时开关（默认关）。开启后 ONNX 引擎每次识别多打一条 timing 日志
+     * （角点/透视/分类各段耗时），供性能对比实验与排查识别耗时用；平时关闭零开销。
+     * 不放主页 UI：这是诊断开关，实验机用 adb 改 shared_prefs 即可。
+     */
+    var benchProfiling: Boolean
+        get() = sp.getBoolean(KEY_BENCH_PROFILING, false)
+        set(value) { sp.edit().putBoolean(KEY_BENCH_PROFILING, value).apply() }
 
     companion object {
         private const val KEY_RECOGNIZER_ENGINE = "recognizer_engine"
@@ -73,6 +95,9 @@ class AssistConfig(context: Context) {
         private const val KEY_SEARCH_DEPTH = "search_depth"
         private const val KEY_HASH_MB = "hash_mb"
         private const val KEY_MULTI_PV = "multi_pv"
+        private const val KEY_SEARCH_MODE = "search_mode"
+        private const val KEY_SEARCH_TIME_MS = "search_time_ms"
         private const val KEY_OVERLAY_THEME = "overlay_theme"
+        private const val KEY_BENCH_PROFILING = "bench_profiling"
     }
 }

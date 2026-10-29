@@ -1,16 +1,12 @@
 <resources>
     <string name="app_name">象棋迪克</string>
-    <string name="title_activity_play">PlayActivity</string>
-    <string name="dummy_button">Dummy Button</string>
-    <string name="dummy_content">DUMMY\nCONTENT</string>
+
+    <!-- 主页门面（美学终稿 §3.1）：hero 品牌句唯一出场位，无标点 -->
+    <string name="main_hero">看穿这一局</string>
+    <string name="main_help">帮助</string>
+    <string name="main_about">关于</string>
 
     <string name="engine_terminated">Engine terminated</string>
     <string name="uci_protocol_error">UCI protocol error</string>
     <string name="failed_to_start_engine">Failed to start engine</string>
-
-    <string-array name="choice_values">
-        <item>Choice 1</item>
-        <item>Choice 2</item>
-        <item>Choice 3</item>
-    </string-array>
 </resources>

@@ -2,25 +2,122 @@
 
 
 
-    <!-- ==== 主页按钮样式（对齐 Cabinet home_btn_*）==== -->
+    <!-- ==== 纸档按钮样式（美学终稿 §3.1/§4 组件规范）==== -->
 
-    <!-- 主页主按钮（对弈/连线/打谱）：朱砂实底 selector，白字 15sp 粗体，48dp 高 -->
-    <style name="HomeButton.Primary" parent="">
-        <item name="android:background">@drawable/home_btn_primary</item>
-        <item name="android:textColor">@color/white</item>
+    <!-- 主按钮：1.5dp 朱砂描边、14dp 圆角，无内部装饰——全部表情来自
+         线框颜色与文字（可用·朱砂 / 运行·警示 / 完成·玉，运行态换色由
+         AssistActivity 切换 background 资源实现）。
+         backgroundTint=@null：M3 主题下 <Button> 是 MaterialButton，会用
+         colorPrimary 把自定义背景整体染色（实底胶囊、描边变色），必须关掉 -->
+    <style name="MainButton" parent="">
+        <item name="android:background">@drawable/main_btn_outline</item>
+        <item name="backgroundTint">@null</item>
+        <item name="android:textColor">@color/xq_ink_text</item>
         <item name="android:textSize">15sp</item>
         <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.1</item>
         <item name="android:minHeight">48dp</item>
         <item name="android:gravity">center</item>
     </style>
 
-    <!-- 主页次按钮（帮助/关于）：半透明底 + 1dp 描边，墨底上用象牙白文字 -->
-    <style name="HomeButton.Secondary" parent="">
-        <item name="android:background">@drawable/home_btn_secondary</item>
-        <item name="android:textColor">@color/qi_ivory</item>
-        <item name="android:textSize">15sp</item>
+    <!-- 底部文字入口（帮助/关于）：无底无边，12sp 次级灰绿，48dp 触控目标 -->
+    <style name="MainTextButton" parent="">
+        <item name="android:background">@drawable/main_text_btn_bg</item>
+        <item name="backgroundTint">@null</item>
+        <item name="android:textColor">@color/xq_muted</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:letterSpacing">0.08</item>
+        <item name="android:minWidth">64dp</item>
         <item name="android:minHeight">48dp</item>
         <item name="android:gravity">center</item>
+    </style>
+
+    <!-- ==== 连线页样式（美学终稿 §3.2 三步授权清单与设置项）==== -->
+
+    <!-- 步骤行：卡片面 + 1dp 描边（背景见 step_row_bg），序号圆/胶囊由代码回填状态 -->
+    <style name="StepRow" parent="">
+        <item name="android:background">@drawable/step_row_bg</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:orientation">horizontal</item>
+        <item name="android:paddingLeft">12dp</item>
+        <item name="android:paddingTop">8dp</item>
+        <item name="android:paddingRight">12dp</item>
+        <item name="android:paddingBottom">8dp</item>
+        <item name="android:minHeight">52dp</item>
+    </style>
+
+    <!-- 步骤序号圆 25dp：完成玉✓实心/待办朱砂描边/未开始灰空心（代码回填背景与色） -->
+    <style name="StepNum" parent="">
+        <item name="android:layout_width">25dp</item>
+        <item name="android:layout_height">25dp</item>
+        <item name="android:gravity">center</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:textColor">@color/xq_zhu</item>
+        <item name="android:maxLines">1</item>
+    </style>
+
+    <!-- 步骤标题/提示 -->
+    <style name="StepTitle" parent="">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textColor">@color/xq_ink_text</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:ellipsize">end</item>
+    </style>
+
+    <style name="StepHint" parent="">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textColor">@color/xq_muted</item>
+        <item name="android:textSize">11sp</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:ellipsize">end</item>
+    </style>
+
+    <!-- 状态胶囊（已就绪/去授予/按需/运行中）：pill 描边，边框与文字色由代码回填 -->
+    <style name="StepChip" parent="">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:paddingLeft">10dp</item>
+        <item name="android:paddingTop">3dp</item>
+        <item name="android:paddingRight">10dp</item>
+        <item name="android:paddingBottom">3dp</item>
+        <item name="android:textSize">11sp</item>
+        <item name="android:textColor">@color/xq_muted</item>
+        <item name="android:maxLines">1</item>
+    </style>
+
+    <!-- 值芯片（悬浮窗主题循环切换按钮）：pill 描边静态款（backgroundTint=@null 防 M3 染色） -->
+    <style name="ValueChip" parent="">
+        <item name="android:background">@drawable/engine_chip_bg</item>
+        <item name="backgroundTint">@null</item>
+        <item name="android:textColor">@color/xq_muted</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:paddingLeft">14dp</item>
+        <item name="android:paddingTop">4dp</item>
+        <item name="android:paddingRight">14dp</item>
+        <item name="android:paddingBottom">4dp</item>
+        <item name="android:minHeight">32dp</item>
+        <item name="android:gravity">center</item>
+        <item name="android:maxLines">1</item>
+    </style>
+
+    <!-- 识别引擎单选芯片：button=@null 去圆点，选中态朱砂描边+朱砂字（selector 见
+         engine_chip_bg / color/engine_chip_text，chip_segment 同构） -->
+    <style name="EngineChip" parent="">
+        <item name="android:background">@drawable/engine_chip_bg</item>
+        <item name="android:button">@null</item>
+        <item name="android:textColor">@color/engine_chip_text</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:paddingLeft">14dp</item>
+        <item name="android:paddingTop">4dp</item>
+        <item name="android:paddingRight">14dp</item>
+        <item name="android:paddingBottom">4dp</item>
+        <item name="android:minHeight">32dp</item>
+        <item name="android:gravity">center</item>
+        <item name="android:maxLines">1</item>
     </style>
 
     <!-- ==== 悬浮窗样式（对齐 Cabinet overlay_panel 三列布局）==== -->

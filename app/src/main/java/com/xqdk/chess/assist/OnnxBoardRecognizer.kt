@@ -58,8 +58,12 @@ class OnnxBoardRecognizer(
         /** 角点复检间隔（毫秒）：复用角点超过该时长后强制全图重定位一次 */
         private const val POSE_RECHECK_MS = 8000L
 
-        /** ONNX 推理 intra-op 线程数（0 = onnxruntime 默认策略：物理核数） */
-        private const val INTRA_THREADS = 2
+        /** ONNX 推理 intra-op 线程数（纯 CPU EP）。4 ≈ 中端机大核数，cabinet 仓
+         *  2026-10-27 真机由 2 调 4 实测提速；XNNPACK EP 同日真机试过即回退——
+         *  onnxruntime-android 1.17.1 的 XNNPACK 在 arm64 有已知崩溃
+         *  （GitHub #21696 GetBlockSize 除零、#22981 int8 量化模型 SIGILL，1.21 才修），
+         *  x86_64 模拟器也是 native abort，Java catch 拦不住。收益调优只走线程数。 */
+        private const val INTRA_THREADS = 4
     }
 
     // 分段耗时累计（仅 worker 线程写，profiling=false 恒为 0）

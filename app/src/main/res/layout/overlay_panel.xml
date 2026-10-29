@@ -152,7 +152,7 @@
         android:layout_height="185dp"
         android:layout_marginHorizontal="2dp" />
 
-    <!-- 右列：值芯片（深度/哈希，无描边）＋ 动作按钮（更新/停止/关闭，1dp 描边）
+    <!-- 右列：值芯片（深度/时间按制式二选一 + 哈希）＋ 动作按钮（更新/停止/关闭/闪电，1dp 描边）
          按钮 23dp 高 + 2dp 间距，总高收进棋盘高度内；
          水平 padding 让按钮/芯片两侧各收 2dp——不顶面板圆角边框（392dp 列宽契约不动） -->
     <LinearLayout
@@ -163,10 +163,18 @@
         android:orientation="vertical"
         android:paddingHorizontal="2dp">
 
+        <!-- 深度芯片（深度制显示）：点按循环 12/20/24 三档 -->
         <TextView
             android:id="@+id/overlay_btn_strength"
             style="@style/OverlayChip"
             android:text="深度 —" />
+
+        <!-- 时间芯片（时间制显示，与深度芯片互斥）：点按循环时长档位 -->
+        <TextView
+            android:id="@+id/overlay_btn_time"
+            style="@style/OverlayChip"
+            android:text="时间 —"
+            android:visibility="gone" />
 
         <TextView
             android:id="@+id/overlay_btn_hash"
@@ -205,5 +213,14 @@
             android:layout_height="23dp"
             android:layout_marginTop="2dp"
             android:text="关闭" />
+
+        <!-- 闪电出着：打断当前搜索立即采纳最优（引擎空闲时 no-op 仅提示） -->
+        <TextView
+            android:id="@+id/overlay_btn_flash"
+            style="@style/OverlayAction"
+            android:layout_width="match_parent"
+            android:layout_height="23dp"
+            android:layout_marginTop="2dp"
+            android:text="闪电" />
     </LinearLayout>
 </LinearLayout>

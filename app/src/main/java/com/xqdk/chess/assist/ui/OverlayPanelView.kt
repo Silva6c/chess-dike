@@ -60,8 +60,11 @@ class OverlayModel(
     val manualMode: Boolean = false,
     /** 手动模式下当前选中的格（canonical x,y），迷你棋盘绘制高亮 */
     val selectedCell: Pair<Int, Int>? = null,
-    /** 引擎深度档值（"20"）；null = 显示弱化占位 */
+    /** 引擎深度档值（"20"，深度制显示）；时间制下为 null → 深度芯片隐藏 */
     val depthText: String? = null,
+    /** 时间制时长档值（"3s"，时间制显示）；深度制下为 null → 时间芯片隐藏。
+     *  与 [depthText] 互斥（连线页思考制式决定，二者至多一个非 null） */
+    val timeText: String? = null,
     /** 引擎 Hash 档值（"256"） */
     val hashText: String? = null,
     /** 识别引擎档值（"ONNX"/"YOLO"）；null = 显示弱化占位 */
@@ -91,6 +94,10 @@ enum class OverlayAction {
     CYCLE_ENGINE,
     /** 引擎变招路数（MultiPV）1→2→3→1 循环；1 路算力最全 */
     CYCLE_MULTIPV,
+    /** 时间制时长档循环（仅时间制显示"时间"芯片；深度制由 CYCLE_STRENGTH 负责） */
+    CYCLE_TIME,
+    /** 闪电出着：打断当前搜索，立即采纳当前最优（引擎空闲时 no-op） */
+    FLASH_STOP,
 }
 
 class OverlayPanelView @JvmOverloads constructor(
@@ -109,6 +116,7 @@ class OverlayPanelView @JvmOverloads constructor(
     private val btnPause: TextView
     private val btnClose: TextView
     private val btnStrength: TextView
+    private val btnTime: TextView
     private val btnHash: TextView
     private val btnEngine: TextView
     private val btnChange: TextView
@@ -116,6 +124,7 @@ class OverlayPanelView @JvmOverloads constructor(
     private val btnUndo: TextView
     private val btnManual: TextView
     private val btnTurn: TextView
+    private val btnFlash: TextView
 
     /**
      * 真正的背景层 = XML 里的 overlay_root：悬浮窗 root 的 background 运行期
@@ -191,6 +200,7 @@ class OverlayPanelView @JvmOverloads constructor(
         btnPause = findViewById(R.id.overlay_btn_pause)
         btnClose = findViewById(R.id.overlay_btn_close)
         btnStrength = findViewById(R.id.overlay_btn_strength)
+        btnTime = findViewById(R.id.overlay_btn_time)
         btnHash = findViewById(R.id.overlay_btn_hash)
         btnEngine = findViewById(R.id.overlay_btn_engine)
         btnChange = findViewById(R.id.overlay_btn_change)
@@ -198,6 +208,7 @@ class OverlayPanelView @JvmOverloads constructor(
         btnUndo = findViewById(R.id.overlay_btn_undo)
         btnManual = findViewById(R.id.overlay_btn_manual)
         btnTurn = findViewById(R.id.overlay_btn_turn)
+        btnFlash = findViewById(R.id.overlay_btn_flash)
         closeNormalColor = btnClose.currentTextColor
 
         btnPause.setOnClickListener { onAction?.invoke(OverlayAction.PAUSE) }
@@ -206,9 +217,11 @@ class OverlayPanelView @JvmOverloads constructor(
         btnManual.setOnClickListener { onAction?.invoke(OverlayAction.MANUAL) }
         btnTurn.setOnClickListener { onAction?.invoke(OverlayAction.FLIP_TURN) }
         btnStrength.setOnClickListener { onAction?.invoke(OverlayAction.CYCLE_STRENGTH) }
+        btnTime.setOnClickListener { onAction?.invoke(OverlayAction.CYCLE_TIME) }
         btnHash.setOnClickListener { onAction?.invoke(OverlayAction.CYCLE_HASH) }
         btnEngine.setOnClickListener { onAction?.invoke(OverlayAction.CYCLE_ENGINE) }
         btnMultiPv.setOnClickListener { onAction?.invoke(OverlayAction.CYCLE_MULTIPV) }
+        btnFlash.setOnClickListener { onAction?.invoke(OverlayAction.FLASH_STOP) }
         btnClose.setOnClickListener {
             if (!closeArmed) {
                 closeArmed = true
@@ -297,8 +310,12 @@ class OverlayPanelView @JvmOverloads constructor(
             }
         }
 
-        // 值芯片：标签灰 + 值琥珀（等宽由 tnum 保证）；setText 前比对防频跳（根因 4）
+        // 值芯片：标签灰 + 值琥珀（等宽由 tnum 保证）；setText 前比对防频跳（根因 4）。
+        // 深度/时间芯片按思考制式互斥显示（连线页切换，depthText/timeText 至多一个非 null）
+        btnStrength.visibility = if (model.depthText != null) View.VISIBLE else View.GONE
+        btnTime.visibility = if (model.timeText != null) View.VISIBLE else View.GONE
         setChipText(btnStrength, "深度", model.depthText)
+        setChipText(btnTime, "时间", model.timeText)
         setChipText(btnHash, "哈希", model.hashText)
         setChipText(btnEngine, "引擎", model.engineText)
         val pauseText = if (model.paused) "继续" else "停止"
@@ -350,12 +367,13 @@ class OverlayPanelView @JvmOverloads constructor(
 
         // 值芯片（每个 view 各取一份 Drawable 实例，禁止共享）
         btnStrength.background = theme.chipBackground(context)
+        btnTime.background = theme.chipBackground(context)
         btnHash.background = theme.chipBackground(context)
         btnEngine.background = theme.chipBackground(context)
 
         // 动作按钮：停止 = 琥珀警示描边（唯一带语义描边的动作）
         btnPause.background = theme.actionBackground(context, palette.stopStroke, palette.stopStrokePressed)
-        for (v in listOf(btnChange, btnMultiPv, btnUndo, btnManual, btnTurn, btnClose)) {
+        for (v in listOf(btnChange, btnMultiPv, btnUndo, btnManual, btnTurn, btnFlash, btnClose)) {
             v.background = theme.actionBackground(context)
             v.setTextColor(palette.fg)
         }

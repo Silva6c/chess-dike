@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 识别引擎单选芯片（美学终稿 §3.2 设置项）：选中朱砂描边、未选 xq_line 描边 -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_checked="true">
+        <shape android:shape="rectangle">
+            <corners android:radius="999dp" />
+            <solid android:color="@color/xq_surface" />
+            <stroke android:width="1dp" android:color="@color/xq_zhu" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="999dp" />
+            <solid android:color="@color/xq_surface" />
+            <stroke android:width="1dp" android:color="@color/xq_line" />
+        </shape>
+    </item>
+</selector>

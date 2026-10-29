@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 三步授权清单行（美学终稿 §3.2）：卡片面 xq_surface + 1dp xq_line 描边（色差分层零阴影）。
+     点击反馈由前景涟漪（android:foreground）承担，见 assist_activity.xml 步骤行。 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="13dp" />
+    <solid android:color="@color/xq_surface" />
+    <stroke android:width="1dp" android:color="@color/xq_line" />
+</shape>
