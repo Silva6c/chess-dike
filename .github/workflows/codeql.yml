@@ -1,0 +1,51 @@
+# CodeQL 代码扫描（GitHub 官方安全分析）：结果进 Security → Code scanning。
+# badge 显示本工作流成败（扫描发现告警不影响 badge 颜色，告警在 Security 页消化，
+# 不形成门禁）。只扫 java-kotlin：nativeutil.cpp 单文件不值得为它引入 NDK 构建
+# 链的分析复杂度；版权物（ONNX/桔库）不进 git 也不阻塞——构建本身不校验 assets
+# （资产注入是 Build-XQDK 的发布口径，见其"资产自检"步）。
+name: CodeQL
+
+on:
+  push:
+    branches: [main] # 只跟 main：stable-* tag 已由 Build-XQDK 覆盖，不重复触发
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 3 * * 1" # 每周一 UTC 03:00（北京 11:00）例行全量扫描
+
+permissions:
+  security-events: write # 上传扫描结果到 Security → Code scanning
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (java-kotlin)
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: gradle
+
+    # runner 预装 SDK 未必含 compileSdk 34 与钉定的 NDK 25.1，与 Build-XQDK 同款：
+    # 先接受 license 让 gradle/sdkmanager 自动补装（CodeQL autobuild 探测 Gradle
+    # 后执行构建，环境要求与 android.yml 完全一致）
+    - name: Accept SDK licenses
+      run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
+
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v3
+      with:
+        languages: java-kotlin
+        build-mode: autobuild
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v3
+      with:
+        category: "/language:java-kotlin"

@@ -1,6 +1,7 @@
 # 象棋迪克 XQDK -- 开源免费的安卓版中国象棋学习工具
 
 [![Build-XQDK](https://github.com/Silva6c/chess-dike/actions/workflows/android.yml/badge.svg)](https://github.com/Silva6c/chess-dike/actions/workflows/android.yml)
+[![CodeQL](https://github.com/Silva6c/chess-dike/actions/workflows/codeql.yml/badge.svg)](https://github.com/Silva6c/chess-dike/actions/workflows/codeql.yml)
 [![Release](https://img.shields.io/github/v/release/Silva6c/chess-dike)](https://github.com/Silva6c/chess-dike/releases/latest)
 [![License: GPL v3](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/Android-8.0%2B%20(API%2026)-green)
