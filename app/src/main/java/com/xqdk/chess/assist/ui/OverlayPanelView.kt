@@ -69,8 +69,8 @@ class OverlayModel(
     val hashText: String? = null,
     /** 识别引擎档值（"ONNX"/"YOLO"）；null = 显示弱化占位 */
     val engineText: String? = null,
-    /** 引擎变招路数（MultiPV 1-3）：左列档位按钮文字 "N变" */
-    val multiPv: Int = 3,
+    /** 引擎变招路数（MultiPV 1-3）：左列档位按钮文字 "N变"（默认 1 路算力最全） */
+    val multiPv: Int = 1,
 )
 
 enum class OverlayAction {

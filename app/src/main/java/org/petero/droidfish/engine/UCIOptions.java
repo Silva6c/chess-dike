@@ -26,7 +26,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
 
-public class UCIOptions implements Serializable, Cloneable {
+public class UCIOptions implements Serializable {
     private static final long serialVersionUID = 1L;
     private ArrayList<String> names;
     private Map<String, OptionBase> options;
@@ -39,21 +39,10 @@ public class UCIOptions implements Serializable, Cloneable {
         STRING
     }
 
-    public abstract static class OptionBase implements Serializable, Cloneable {
+    public abstract static class OptionBase implements Serializable {
         private static final long serialVersionUID = 1L;
         public String name;
         public Type type;
-        public boolean visible = true; // True if visible in "Engine Options" dialog
-
-        @Override
-        public OptionBase clone() throws CloneNotSupportedException {
-            return (OptionBase) super.clone();
-        }
-
-        /**
-         * Return true if current value != default value.
-         */
-        abstract public boolean modified();
 
         /**
          * Return current value as a string.
@@ -104,11 +93,6 @@ public class UCIOptions implements Serializable, Cloneable {
         }
 
         @Override
-        public boolean modified() {
-            return value != defaultValue;
-        }
-
-        @Override
         public String getStringValue() {
             return value ? "true" : "false";
         }
@@ -136,11 +120,6 @@ public class UCIOptions implements Serializable, Cloneable {
             this.maxValue = maxV;
             this.value = def;
             this.defaultValue = def;
-        }
-
-        @Override
-        public boolean modified() {
-            return value != defaultValue;
         }
 
         @Override
@@ -174,11 +153,6 @@ public class UCIOptions implements Serializable, Cloneable {
         }
 
         @Override
-        public boolean modified() {
-            return !value.equals(defaultValue);
-        }
-
-        @Override
         public String getStringValue() {
             return value;
         }
@@ -208,11 +182,6 @@ public class UCIOptions implements Serializable, Cloneable {
         }
 
         @Override
-        public boolean modified() {
-            return false;
-        }
-
-        @Override
         public String getStringValue() {
             return "";
         }
@@ -228,11 +197,6 @@ public class UCIOptions implements Serializable, Cloneable {
             this.type = Type.STRING;
             this.value = def;
             this.defaultValue = def;
-        }
-
-        @Override
-        public boolean modified() {
-            return !value.equals(defaultValue);
         }
 
         @Override
@@ -254,31 +218,8 @@ public class UCIOptions implements Serializable, Cloneable {
         options = new TreeMap<>();
     }
 
-    @Override
-    public UCIOptions clone() throws CloneNotSupportedException {
-        UCIOptions copy = new UCIOptions();
-
-        copy.names = new ArrayList<>();
-        copy.names.addAll(names);
-
-        copy.options = new TreeMap<>();
-        for (Map.Entry<String, OptionBase> e : options.entrySet())
-            copy.options.put(e.getKey(), e.getValue().clone());
-
-        return copy;
-    }
-
-    public void clear() {
-        names.clear();
-        options.clear();
-    }
-
     public boolean contains(String optName) {
         return getOption(optName) != null;
-    }
-
-    public final String[] getOptionNames() {
-        return names.toArray(new String[0]);
     }
 
     public final OptionBase getOption(String name) {
@@ -290,16 +231,5 @@ public class UCIOptions implements Serializable, Cloneable {
         names.add(name);
         options.put(name, p);
         Log.d("UCIOptions", "Added option " + name + " type " + p.type + " value " + p.getStringValue());
-    }
-
-    // toString() method
-    @Override
-    public String toString() {
-        StringBuilder sb = new StringBuilder();
-        for (String name : names) {
-            OptionBase o = options.get(name);
-            sb.append(o.name).append(" = ").append(o.getStringValue()).append("\n");
-        }
-        return sb.toString();
     }
 }

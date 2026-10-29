@@ -74,6 +74,20 @@ class OnnxBoardRecognizer(
     private var tClsRun = 0L
 
     /**
+     * 最近一次 [recognize] 的诊断快照（仅 worker 线程串行读写）：定位方式标签
+     * （""=全图 / "(reuse)"=缓存复用 / "(recheck)"=复检 / "?"=定位失败）、失败
+     * 原因（成功为 null）与五段耗时（[lastSegmentsNs]）。诊断日志的写行收口在
+     * 服务层（识别帧行要叠加节拍/间隔等只有服务掌握的上下文），识别器只负责
+     * 把这些事实暴露出来。
+     */
+    var lastPoseTag: String = "?" ; private set
+    var lastFailReason: String? = null ; private set
+
+    /** 最近一次 recognize 的五段耗时 ns：[poseWarp, poseRun, boardWarp, clsPrep, clsRun] */
+    fun lastSegmentsNs(): LongArray =
+        longArrayOf(tPoseWarp, tPoseRun, tBoardWarp, tClsPrep, tClsRun)
+
+    /**
      * 最近一次 RTMPose 成功定位的四角（帧像素坐标）。棋盘 App 里棋盘位置不会自己动，
      * 复用可跳过 RTMPose（约占单帧 25~30%）；棋盘挪走/被遮挡由调用方在连续识别
      * 失败或连续不稳定时调 [invalidateCorners] 强制重新定位。
@@ -225,19 +239,23 @@ class OnnxBoardRecognizer(
         if (!loaded) return null
         val start = System.currentTimeMillis()
         if (profiling) { tPoseWarp = 0; tPoseRun = 0; tBoardWarp = 0; tClsPrep = 0; tClsRun = 0 }
+        // 诊断落盘的定位标签：""=全图定位/(reuse)=缓存复用/(recheck)=复检/?=失败帧。
+        // try 块内的 return null 是提前返回，finally 也要读到它——声明在外层
+        var poseTag = "?"
         val reuse = cachedCorners
         // 到期复检：复用超时后本帧强制全图重定位。检出即换新（新角点更准），
         // 棋盘没动结果不变、挪了直接采准；检出失败走 return null，由调用方的
         // 连续失败计数决定是否清缓存自愈。lastFullPoseAt 只在真正跑过全图定位
         // 后推进，保证失败后的下一帧继续尝试而不是再等一个周期。
         val recheckDue = reuse != null && start - lastFullPoseAt > POSE_RECHECK_MS
-        return try {
+        val result: OnnxResult? = try {
             val corners = if (reuse == null || recheckDue) {
-                detectCorners(frame) ?: return null
+                detectCorners(frame) ?: run { lastFailReason = "定位失败"; return null }
             } else reuse
             val box = boxOfCorners(corners)
             if (!boxPlausible(box, frame.width, frame.height)) {
                 Log.d(TAG, "corner box implausible: ${box.joinToString()}")
+                lastFailReason = "定位框异常"
                 return null
             }
             if (reuse == null || recheckDue) {
@@ -251,13 +269,21 @@ class OnnxBoardRecognizer(
                 cachedCorners = corners // 全图定位成功且校验通过才缓存
                 lastFullPoseAt = start
             }
+            // 定位方式标签：空串=全图定位；复检帧同样跑了 RTMPose，与纯复用区分
+            poseTag = when {
+                reuse == null -> ""
+                recheckDue -> "(recheck)"
+                else -> "(reuse)"
+            }
             val warped = warpBoard(frame, corners)
             val (raw, avg, pieces) = classifyCells(warped)
             if (pieces < MIN_PIECES) {
                 Log.d(TAG, "onnx pieces too few: $pieces")
+                lastFailReason = "棋子过少($pieces)"
                 return null
             }
-            val contentOrient = DetectionBoardMapper.detectOrientation(raw) ?: return null
+            val contentOrient = DetectionBoardMapper.detectOrientation(raw)
+                ?: run { lastFailReason = "朝向未定"; return null }
             val canonical = DetectionBoardMapper.toCanonical(raw, contentOrient)
             val orientation = DetectionBoardMapper.screenOrientation(corners, contentOrient)
             if (contentOrient != orientation) {
@@ -267,22 +293,25 @@ class OnnxBoardRecognizer(
                 Log.d(TAG, "warp rotated: content=$contentOrient screen=$orientation")
             }
             if (profiling) {
-                // 空串=全图定位；复检帧同样跑了 RTMPose，标 (recheck) 与纯复用区分
-                val poseTag = when {
-                    reuse == null || recheckDue -> if (reuse == null) "" else "(recheck)"
-                    else -> "(reuse)"
-                }
                 Log.i(TAG, "timing%s: poseWarp=%dms poseRun=%dms boardWarp=%dms clsPrep=%dms clsRun=%dms total=%dms"
                     .format(poseTag, tPoseWarp / 1_000_000,
                         tPoseRun / 1_000_000, tBoardWarp / 1_000_000,
                         tClsPrep / 1_000_000, tClsRun / 1_000_000, System.currentTimeMillis() - start))
             }
-            OnnxResult(raw, canonical, orientation, box, avg, pieces,
+            val r = OnnxResult(raw, canonical, orientation, box, avg, pieces,
                 System.currentTimeMillis() - start)
+            lastFailReason = null
+            r
         } catch (t: Throwable) {
             Log.w(TAG, "onnx recognize failed", t)
+            lastFailReason = "异常:${t.javaClass.simpleName}"
             null
+        } finally {
+            // 诊断快照同步：定位标签与失败原因留给服务层写行（识别帧行还要叠加
+            // 节拍/间隔等只有服务掌握的上下文）
+            lastPoseTag = poseTag
         }
+        return result
     }
 
     // ==================== 第一步：RTMPose 角点检测 ====================

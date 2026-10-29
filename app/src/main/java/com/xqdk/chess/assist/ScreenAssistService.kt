@@ -72,7 +72,6 @@ class ScreenAssistService : Service() {
         private const val MIN_FRAME_INTERVAL_MS = 220L
         /** 仅当悬浮窗面板遮挡棋盘（抓帧前需短暂隐藏面板）时才放慢到该间隔，避免频繁闪烁 */
         private const val OVERLAY_FRAME_INTERVAL_MS = 1400L
-        private const val MIN_RECOGNIZE_INTERVAL_MS = 250L
         /** 建议成熟阈值：最佳着法连续未变化的时长，超过即视为"定着"（绿箭头） */
         private const val SUGGEST_STABLE_MS = 1200L
         /** 建议渲染节流：info 流（depth/bestmove 变化即推）高频到达时合并悬浮窗重绘——
@@ -82,9 +81,19 @@ class ScreenAssistService : Service() {
         private const val FRAME_DIFF_STEP = 16
         /** 帧差"有变化"的占比阈值（变化采样点比例，与历史 1/500 行为一致） */
         private const val CHANGE_RATIO_MIN = 0.002f
+        /** 切页级大变化阈值：超过即视为用户主动切 App/进对局页，清除识别退避
+         *  （Cabinet 同款——残留退避会把开局首次定位拖慢数秒） */
+        private const val CHANGE_RATIO_PAGE = 0.25f
         /** 帧循环兜底 tick 周期（Cabinet 同款）：画面静止后合成器不再产帧、回调停摆，
          *  确认链（多帧一致）靠它重放 lastFrame 推进，否则走子后永远"正在识别棋盘…" */
         private const val FRAME_TICK_MS = 700L
+        /** 停稳门槛：画面刚运动过（走子动画/切页过渡）时等该时长静默再识别——
+         *  过渡帧推理出来的是错误局面，白烧一轮还污染确认链（Cabinet 同款） */
+        private const val MOTION_SETTLE_MS = 200L
+        /** 停稳等待硬上限：常驻闪烁源导致等不到停稳时按此兜底放行，防永久卡死 */
+        private const val MOTION_SETTLE_MAX_MS = 800L
+        /** 诊断识别行的零段耗时（YOLO 引擎无五段计时，写入时五段列全 0） */
+        private val SEG_NS_ZERO = longArrayOf(0L, 0L, 0L, 0L, 0L)
         /**
          * 单帧最少棋子数：低于该值视为"未见棋盘"（回全屏重定位）。
          * 残局可低至 3 子（帅仕 vs 将），不能沿用固定 10 子门槛——那会把合法残局
@@ -94,9 +103,6 @@ class ScreenAssistService : Service() {
         /** 识别引擎标识：ONNX 两步式（主力，默认）/ YOLO 检测式（回退），主页单选热切换 */
         const val ENGINE_ONNX = "onnx"
         const val ENGINE_YOLO = "yolo"
-        /** ONNX 识别最小间隔（毫秒）：下限取 Cabinet pacer 常规与 burst 之间的折中——
-         *  角点缓存复用帧很便宜（实测 ~180ms），太短会让全图定位背靠背烧 CPU */
-        private const val ONNX_RECOGNIZE_INTERVAL_MIN_MS = 600L
     }
 
     /** 供 Activity 绑定调用的接口 */
@@ -146,7 +152,6 @@ class ScreenAssistService : Service() {
     private val mainHandler = Handler(android.os.Looper.getMainLooper())
 
     private var lastFrameTs = 0L
-    private var lastRecognizeTs = 0L
     private var pendingFrame = false
 
     /**
@@ -224,10 +229,30 @@ class ScreenAssistService : Service() {
     @Volatile private var onnxEngine: OnnxBoardRecognizer? = null
     /** onnxEngine 的赋值/释放锁：后台加载线程与 switchEngine 并发，无锁会泄漏 native 会话 */
     private val onnxEngineLock = Any()
+    /**
+     * 性能诊断落盘文件（性能诊断开关开启时非空）：setBenchProfiling 主线程创建/
+     * 封口，loader 线程注入识别器，识别线程写行——DiagLogWriter 内部 synchronized。
+     */
+    @Volatile private var diagLog: DiagLogWriter? = null
     /** 连续产出结构非法局面的帧数（走子动画过渡帧常客）：连续 3 帧强制角点重定位 */
     private var invalidStreak = 0
-    /** 上一次 ONNX 识别耗时（毫秒）：下一帧间隔 = max(下限, 耗时×2)，自适应退避 */
-    @Volatile private var onnxLastCostMs = 0L
+
+    // ==================== 识别节拍器（Cabinet RecognizePacer 同款，见类 KDoc）====================
+    // 两次识别最短间隔 = max(下限, 上次实际成本×2) × 失败退避(≤8s)，burst 期收紧 cost×1.1。
+    // ONNX 下限 1000 / YOLO 下限 500：全图定位帧真机 ~1s，固定小间隔等于背靠背满载。
+    private val onnxPacer = RecognizePacer(minFloorMs = 1000L)
+    private val yoloPacer = RecognizePacer(minFloorMs = 500L)
+    /** 按当前引擎取节拍器（帧回调/兜底 tick/识别闸口共用；仅 worker 线程访问） */
+    private fun recognizePacer(): RecognizePacer =
+        if (engineName == ENGINE_ONNX) onnxPacer else yoloPacer
+
+    /**
+     * 最近一次画面运动（帧差判真变化）时刻：停稳门槛依据（见 MOTION_SETTLE_MS）。
+     * 仅 worker 线程读写（帧回调/识别/兜底 tick 全串行）。
+     */
+    private var lastMotionTs = 0L
+    /** 停稳等待开始时刻（常驻闪烁源导致等不到停稳时，按 MOTION_SETTLE_MAX_MS 兜底放行） */
+    private var motionWaitStart = 0L
 
     private var analysisEngine: AnalysisEngine? = null
     @Volatile private var engineReady = false
@@ -268,8 +293,8 @@ class ScreenAssistService : Service() {
     /** 引擎 Hash 档位（与搜索设置同口径）：从 256 起步循环 */
     private val hashLevels = listOf(256, 512, 1024, 2048)
     @Volatile private var hashIndex = 0
-    /** 引擎变招路数（MultiPV 1-3，悬浮窗左列"变招档"按钮循环；1 路算力最全） */
-    @Volatile private var multiPv: Int = 3
+    /** 引擎变招路数（MultiPV 1-3，悬浮窗左列"变招档"按钮循环；默认 1 路算力最全） */
+    @Volatile private var multiPv: Int = 1
     /** 时间制时长档位（时间制"时间"芯片循环；与 AnalysisEngine 的 500-30000ms 界一致） */
     private val timeLevels = listOf("1秒" to 1000, "2秒" to 2000, "3秒" to 3000, "5秒" to 5000, "10秒" to 10000, "30秒" to 30000)
     @Volatile private var timeIndex = 2
@@ -319,6 +344,18 @@ class ScreenAssistService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder = binder
+
+    /**
+     * 任务被划掉 = 用户明确要彻底退出：随任务收场（收面板 + 停录屏 + stopSelf），
+     * 不留孤儿前台服务与悬浮窗——否则用户"划掉即退出"的心智落空，下次打开 App
+     * 悬浮窗还在屏上（用户实测 bug 的另一入口）。主线程回调，满足 stopGuidance
+     * 的线程要求；bind-only（从未开始识别）时同样安全：面板/录屏皆 null，
+     * releaseCapture 与 stopSelf 幂等。
+     */
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        stopGuidance()
+    }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_START) {
@@ -382,7 +419,9 @@ class ScreenAssistService : Service() {
         invalidStreak = 0
         recMissStreak = 0
         cropUnstableStreak = 0
-        onnxLastCostMs = 0
+        // 新会话识别立即放行：清退避/burst/成本历史（旧会话的失败退避不带入）
+        onnxPacer.reset()
+        yoloPacer.reset()
         val metrics = screenMetrics()
         val w = metrics.widthPixels
         val h = metrics.heightPixels
@@ -393,6 +432,7 @@ class ScreenAssistService : Service() {
             // 也无释放——注册回调，onStop 后释放采集并提示（回调任务在 worker 队列串行）
             mp.registerCallback(projectionCallback, workerHandler)
         }
+        diagLog?.appendEvent("录屏启动", "${w}×$h @${dpi}dpi")
         // 记录帧尺寸：悬浮窗遮挡判断把归一化棋盘框换算回像素时需要
         config.frameSize = w to h
         val reader = ImageReader.newInstance(w, h, PixelFormat.RGBA_8888, 2)
@@ -468,7 +508,14 @@ class ScreenAssistService : Service() {
                 // 定位与多帧确认每帧都要推理
                 val ratio = frameChangeRatio(image)
                 if (ratio >= CHANGE_RATIO_MIN) {
+                    lastMotionTs = now
                     screenChangedSinceRec = true
+                    recognizePacer().requestBurst()
+                    // 切页级大变化（用户主动切 App/弹窗）：清退避，新页面立即全速定位
+                    if (ratio >= CHANGE_RATIO_PAGE) {
+                        recognizePacer().clearBackoff()
+                        diagLog?.appendEvent("切页", "清退避（画面变化 ${(ratio * 100).toInt()}%）")
+                    }
                 }
                 if (ratio < CHANGE_RATIO_MIN && !slowPath) return
                 val frame = imageToFrame(image)
@@ -489,7 +536,13 @@ class ScreenAssistService : Service() {
             reader.acquireLatestImage()?.use { img ->
                 val ratio = frameChangeRatio(img)
                 if (ratio >= CHANGE_RATIO_MIN) {
+                    lastMotionTs = now
                     screenChangedSinceRec = true
+                    recognizePacer().requestBurst()
+                    if (ratio >= CHANGE_RATIO_PAGE) {
+                        recognizePacer().clearBackoff()
+                        diagLog?.appendEvent("切页", "清退避（画面变化 ${(ratio * 100).toInt()}%）")
+                    }
                     // 变化帧像素即刻保存（Cabinet kept 机制）：录屏帧"取走即焚"，
                     // 不保存则兜底重放拿到的永远是更旧的画面（走子后冻结的根源）
                     lastFrame = imageToFrame(img)
@@ -512,7 +565,9 @@ class ScreenAssistService : Service() {
             if (mediaProjection == null) return
             if (!paused && !manualMode) {
                 val unstable = tracker.unstableStreak > 0
-                if ((screenChangedSinceRec || unstable) && !pendingFrame) {
+                // 重放也过识别节拍器：退避期重放是白做一轮完整处理（闸口反正拦下）
+                if ((screenChangedSinceRec || unstable) && !pendingFrame &&
+                    recognizePacer().canRecognizeNow()) {
                     val f = lastFrame
                     if (f != null) {
                         pendingFrame = true
@@ -520,7 +575,9 @@ class ScreenAssistService : Service() {
                     }
                 }
             }
-            workerHandler.postDelayed(this, FRAME_TICK_MS)
+            // burst 快速确认期用 150ms 细粒度：间隔下限 300ms 时 tick 相位损失减半，
+            // 走子→确认链每一环都省一截；稳态仍 700ms（闸口反正会拦，粒度只影响响应延迟）
+            workerHandler.postDelayed(this, if (recognizePacer().isBursting()) 150L else FRAME_TICK_MS)
         }
     }
 
@@ -698,6 +755,16 @@ class ScreenAssistService : Service() {
             if (want != engineName) switchEngine(want)
         }
         if (paused || manualMode) return
+        // 停稳门槛：画面刚运动过（走子动画/切页过渡）时先等 MOTION_SETTLE_MS 静默
+        // 再识别——过渡帧推理出来的是错误局面，白烧一轮还污染确认；常驻闪烁源
+        // 导致永远等不到停稳时按 MOTION_SETTLE_MAX_MS 兜底放行（Cabinet 同款）
+        val nowTs = System.currentTimeMillis()
+        if (nowTs - lastMotionTs < MOTION_SETTLE_MS) {
+            if (motionWaitStart == 0L) motionWaitStart = nowTs
+            if (nowTs - motionWaitStart < MOTION_SETTLE_MAX_MS) return
+        } else {
+            motionWaitStart = 0L
+        }
         // 保存最近一帧引用（Frame 像素独立分配，保存引用安全）：
         // 画面静止回调停摆时由 frameTick 重放它推进多帧确认
         lastFrame = frame
@@ -714,30 +781,48 @@ class ScreenAssistService : Service() {
             return
         }
         val now = System.currentTimeMillis()
-        if (now - lastRecognizeTs < MIN_RECOGNIZE_INTERVAL_MS) return
-        lastRecognizeTs = now
+        // 节拍器闸口：成本自适应间隔 + 失败退避（此前固定 250ms 在画面持续变化时
+        // 背靠背整屏推理，真机热节流拖垮全系统——Cabinet 同款教训）
+        if (!yoloPacer.canRecognizeNow(now)) return
+        val pace = yoloPacer.describe()
         val crop = cropHint(frame)
+        val t0 = System.currentTimeMillis()
         val mapped = try {
             yolo.detect(frame, crop)
         } catch (e: Exception) {
             Log.w(TAG, "yolo detect failed", e)
             null
         }
+        val cost = System.currentTimeMillis() - t0
         if (mapped == null || mapped.pieceCount < MIN_RECOGNIZED_PIECES) {
+            // 诊断识别行（YOLO 无五段计时，段耗时全 0；定位列标 yolo）
+            diagLog?.appendRecognize(now, "yolo", SEG_NS_ZERO, cost, pace, ok = false,
+                failReason = if (mapped == null) "检出失败" else "棋子过少(${mapped.pieceCount})")
+            // 对局中已定位棋盘的首次失败多为走子动画过渡帧：不退避不烧 burst（Cabinet
+            // 同款语义）；连续 3 次失败才判定棋盘真挪走/被遮挡——清会话网格回全屏重定位
+            // （自愈。原实现失败即清网格：动画期每帧回全屏，反复全屏重定位白烧 CPU）
+            val transient = sessionGrid != null && recMissStreak == 0
+            yoloPacer.markEnd(now = System.currentTimeMillis(), costMs = cost,
+                ok = false, transient = transient)
             recMissStreak++
-            // 裁剪区识别不到（棋盘挪走/被遮挡）：清空会话网格，下一帧回全屏重新定位（自愈）
-            sessionGrid = null
-            if (recMissStreak == 1 || recMissStreak % 10 == 0) {
+            if (recMissStreak >= 3) sessionGrid = null
+            if (!transient && (recMissStreak == 1 || recMissStreak % 10 == 0)) {
                 setStatus("正在识别棋盘…\n请让棋盘完整无遮挡")
             }
             return
         }
+        yoloPacer.markEnd(now = System.currentTimeMillis(), costMs = cost,
+            ok = mapped.grid != null, transient = mapped.grid != null || sessionGrid != null)
         recMissStreak = 0
         // 悬浮窗遮挡判断沿用网格语义：用 YOLO 棋盘框更新会话网格（同时作为裁剪推理提示）
         sessionGrid = mapped.grid
         val result = RecognitionResult(
             mapped.canonical, mapped.screenRaw, mapped.orientation,
             AssistBoard.validate(mapped.canonical), 0, mapped.pieceCount, mapped.avgScore)
+        // 诊断识别行（YOLO 成功路径；结果合法性沿用 issues 语义）
+        diagLog?.appendRecognize(now, "yolo", SEG_NS_ZERO, cost, pace,
+            ok = result.issues.isEmpty(),
+            failReason = if (result.issues.isEmpty()) null else "非法×${result.issues.size}")
         Log.d(TAG, "rec(yolo): pieces=${mapped.pieceCount} orient=${mapped.orientation} " +
             "issue=${result.issues.size} dropped=${mapped.dropped}")
         when (tracker.onFrame(result)) {
@@ -767,6 +852,8 @@ class ScreenAssistService : Service() {
                 screenChangedSinceRec = false
             }
         }
+        // 同 ONNX：成功但仍未确认时续 burst，保持 300ms 级确认节奏（见 handleFrameOnnx）
+        if (mapped.grid != null && tracker.confirmed == null) yoloPacer.requestBurst(4)
     }
 
     /**
@@ -778,11 +865,11 @@ class ScreenAssistService : Service() {
         val eng = onnxEngine
         if (eng == null || !eng.loaded) return // 模型加载中/已回退：跳帧
         val now = System.currentTimeMillis()
-        // 自适应节拍：间隔 = max(下限, 上帧耗时×2)。全图定位帧（真机 ~1s）自动退避，
-        // 杜绝背靠背推理；角点复用帧便宜，按下限 600ms 保持确认节奏
-        val interval = maxOf(ONNX_RECOGNIZE_INTERVAL_MIN_MS.toLong(), onnxLastCostMs * 2)
-        if (now - lastRecognizeTs < interval) return
-        lastRecognizeTs = now
+        // 节拍器闸口：间隔 = max(1s, 上次成本×2) × 失败退避。真机全图定位帧 ~1s 时
+        // 自动拉长到 2~4s，杜绝背靠背推理；burst 期收紧为 cost×1.1 保持确认节奏
+        if (!onnxPacer.canRecognizeNow(now)) return
+        // 放行节拍快照：此刻的 pacer 状态即本帧被放行依据（识别行"节拍"列）
+        val pace = onnxPacer.describe()
         val t0 = System.currentTimeMillis()
         val r = try {
             eng.recognize(frame)
@@ -791,18 +878,25 @@ class ScreenAssistService : Service() {
             null
         }
         val cost = System.currentTimeMillis() - t0
-        onnxLastCostMs = cost
         if (r == null) {
+            // 诊断识别行（失败帧同样写，带定位标签/五段耗时/失败原因）
+            diagLog?.appendRecognize(now, eng.lastPoseTag, eng.lastSegmentsNs(), cost,
+                pace, ok = false, failReason = eng.lastFailReason ?: "未知")
             Log.d(TAG, "onnx recognize -> null (cost=$cost)")
-            // 已定位棋盘下的失败多为走子动画过渡帧（悬空子/计数抖动）：保留会话网格
-            // （棋盘没动，角点缓存与遮挡判断继续有效）；连续 3 次失败才判定棋盘真
-            // 挪走/切了 App，强制角点重定位 + 回全屏（自愈，Cabinet 同款语义）
+            // 已定位棋盘下的失败多为走子动画过渡帧（悬空子/计数抖动）：按瞬时失败
+            // 记账（不退避不烧 burst）、保留会话网格（棋盘没动，角点缓存与遮挡判断
+            // 继续有效）；连续 3 次失败才判定棋盘真挪走/切了 App，强制角点重定位 +
+            // 回全屏（自愈，Cabinet 同款语义）
+            val transient = sessionGrid != null && recMissStreak == 0
+            onnxPacer.markEnd(now = System.currentTimeMillis(), costMs = cost,
+                ok = false, transient = transient)
             recMissStreak++
             if (recMissStreak >= 3) {
+                if (recMissStreak == 3) diagLog?.appendEvent("自愈", "连续 3 帧识别失败→清角点缓存回全屏")
                 eng.invalidateCorners()
                 sessionGrid = null
             }
-            if (recMissStreak == 1 || recMissStreak % 10 == 0) {
+            if (!transient && (recMissStreak == 1 || recMissStreak % 10 == 0)) {
                 setStatus("正在识别棋盘…\n请让棋盘完整无遮挡")
             }
             return
@@ -826,6 +920,14 @@ class ScreenAssistService : Service() {
         // （棋盘没动，旧网格仍是当前最佳估计），连续非法由 invalidStreak 熔断强制
         // 角点重定位；棋盘真挪走由 r==null 路径自愈
         val issuesEmpty = result.issues.isEmpty()
+        // 诊断识别行（非法帧按失败写，带原因——定位成功但棋子误读与定位失败是
+        // 两类完全不同的故障，旧版一律"失败"读不出语义）
+        diagLog?.appendRecognize(now, eng.lastPoseTag, eng.lastSegmentsNs(), cost, pace,
+            ok = issuesEmpty, failReason = if (issuesEmpty) null else "非法×${result.issues.size}")
+        // 记账：合法帧成功；非法帧在已定位棋盘下按过渡帧记账（不退避不烧 burst，
+        // Cabinet 同款——悬空子被错读的过渡帧是确认路上的必要重试而非画面异常）
+        onnxPacer.markEnd(now = System.currentTimeMillis(), costMs = cost,
+            ok = issuesEmpty, transient = issuesEmpty || sessionGrid != null)
         if (issuesEmpty) {
             invalidStreak = 0
             sessionGrid = grid
@@ -834,6 +936,7 @@ class ScreenAssistService : Service() {
         } else {
             invalidStreak++
             if (invalidStreak >= 3) {
+                if (invalidStreak == 3) diagLog?.appendEvent("自愈", "连续 3 帧局面非法→强制全图重定位")
                 // 幂等操作：连续非法期间每帧强制一次全图重定位（Cabinet 同款不清零）
                 eng.invalidateCorners()
             }
@@ -854,10 +957,50 @@ class ScreenAssistService : Service() {
                 screenChangedSinceRec = false
             }
         }
+        // 成功但仍未确认（候选累积中）：续 burst 保持 300ms 级确认节奏——角点缓存
+        // 复用帧很便宜（实测 ~180ms），常规下限 1s 会把开局首次确认拖到 2s+；
+        // 确认完成后不再续，burst 逐帧耗尽自然回归稳态（无空转风险）
+        if (issuesEmpty && tracker.confirmed == null) onnxPacer.requestBurst(4)
     }
 
     /** 主页切换识别引擎（worker 帧循环里应用；切换后局面重新确认） */
     fun setRecognizerEngine(name: String) { pendingEngine = name }
+
+    /**
+     * 性能诊断开关（连线页"性能诊断"按钮，原仅 adb 改 shared_prefs 可达——真机
+     * release 包没有 root 改不了）：开启后 ONNX 识别器每次识别输出分段计时
+     * （logcat 过滤 AssistService）并落盘到 Download 目录的 md 文件（DiagLogWriter，
+     * 用户从文件管理器直接取，无需 adb）。返回值 = 诊断文件路径（开启时为新建
+     * 文件位置、关闭时为已封口文件位置；创建失败或关闭成功但拿不到路径时为 null），
+     * 供应用内 Toast 标明位置。
+     * 分段计时是识别器构造参数，切换须整体重建会话：先释放旧实例（native 会话
+     * 泄漏防线，switchEngine 同款锁内释放），再走 initEngine 后台重载（engineGen
+     * 代际守卫防旧 loader 覆盖），重载期间识别走跳帧逻辑。
+     * 主线程调用（按钮点击路径）；release/initEngine 自身的线程纪律见其注释。
+     */
+    fun setBenchProfiling(on: Boolean): String? {
+        config.benchProfiling = on
+        Log.i(TAG, "bench profiling -> $on")
+        // 诊断文件随开关新建/封口（连续切换时先封口旧文件防句柄泄漏）
+        diagLog?.close()
+        val newLog = if (on) DiagLogWriter(this) else null
+        diagLog = newLog
+        // 会话参数快照 + 开关事件：诊断回来先看这两行，参数对不对/何时开关一目了然
+        newLog?.appendConfig(
+            recognizer = engineName.uppercase(),
+            searchDesc = if (searchModeIsTime) "时间制 ${config.searchTimeMs}ms" else "深度制 ${config.searchDepth} 层",
+            multiPv = config.multiPv,
+            hashMb = config.hashMb,
+            confirmCount = config.confirmCount)
+        newLog?.appendEvent("诊断开关", if (on) "开启" else "关闭")
+        if (engineName != ENGINE_ONNX) return newLog?.displayPath
+        synchronized(onnxEngineLock) {
+            onnxEngine?.release()
+            onnxEngine = null
+        }
+        initEngine(ENGINE_ONNX)
+        return newLog?.displayPath
+    }
 
     /** 按配置初始化识别引擎；onnx 模型加载重（~21.5MB），放后台线程，期间帧走跳过逻辑 */
     private fun initEngine(name: String) {
@@ -868,9 +1011,11 @@ class ScreenAssistService : Service() {
         // 以代际标识让过期 loader 自行释放
         val gen = ++engineGen
         Thread {
-            // profiling 由 AssistConfig.benchProfiling 控制（诊断开关，adb 改
-            // shared_prefs 即可开，免改代码重编译）
+            // profiling 由 AssistConfig.benchProfiling 控制（诊断开关，连线页"性能
+            // 诊断"按钮切换，切换经 setBenchProfiling 重建引擎后生效）；诊断识别行
+            // 的写行收口在服务层（handleFrameOnnx），识别器只暴露分段耗时快照
             val eng = OnnxBoardRecognizer(assets, profiling = config.benchProfiling)
+            val loadStart = System.currentTimeMillis()
             val ok = try { eng.load() } catch (t: Throwable) {
                 Log.w(TAG, "onnx load threw", t); false
             }
@@ -886,6 +1031,9 @@ class ScreenAssistService : Service() {
                 engineName = ENGINE_YOLO
                 setStatus("ONNX 引擎加载失败\n已回退 YOLO 识别")
             }
+            diagLog?.appendEvent("ONNX加载",
+                if (ok) "成功，${System.currentTimeMillis() - loadStart}ms"
+                else "失败（${System.currentTimeMillis() - loadStart}ms）→ 回退 YOLO")
             Log.i(TAG, "onnx engine: ${if (ok) "ready" else "load failed, fallback to yolo"}")
         }.start()
     }
@@ -893,8 +1041,12 @@ class ScreenAssistService : Service() {
     /** 切换引擎：释放旧 ONNX 会话、重置跟踪状态（两引擎输出细节有差异，重新确认更稳） */
     private fun switchEngine(want: String) {
         Log.i(TAG, "switch engine: $engineName -> $want")
+        diagLog?.appendEvent("识别引擎切换", "$engineName → $want")
         tracker.reset()
         resetSuggestionState()
+        // 节拍器归零：新引擎首识别立即放行，旧引擎的成本历史/退避不带入
+        onnxPacer.reset()
+        yoloPacer.reset()
         synchronized(onnxEngineLock) {
             onnxEngine?.release()
             onnxEngine = null
@@ -903,7 +1055,6 @@ class ScreenAssistService : Service() {
         recMissStreak = 0
         cropUnstableStreak = 0
         invalidStreak = 0
-        onnxLastCostMs = 0
         screenChangedSinceRec = true
         engineName = want
         if (want == ENGINE_ONNX) initEngine(want)
@@ -921,6 +1072,7 @@ class ScreenAssistService : Service() {
         history.addLast(HistoryEntry(confirmed, tracker.redGo, currentFen))
         if (history.size > 60) history.removeFirst()
         Log.i(TAG, "board confirmed: $currentFen")
+        diagLog?.appendEvent("棋盘确认", currentFen)
         postRender()
         scheduleAnalysis()
     }
@@ -995,6 +1147,11 @@ class ScreenAssistService : Service() {
         }
     }
 
+    // 诊断引擎行的局面级计时（诊断开关关闭时仅空转赋值，开销可忽略）
+    @Volatile private var engineRowFen: String? = null
+    @Volatile private var engineRowStartTs = 0L
+    @Volatile private var engineRowDepth = -1
+
     private val analysisListener = object : AnalysisEngine.Listener {
         override fun onEngineReady() {
             engineReady = true
@@ -1023,12 +1180,25 @@ class ScreenAssistService : Service() {
                 lastRenderedBest = best
                 throttledPostRender()
             }
+            // 诊断引擎行：同局面深度每推进一档写一行（与渲染节流同口径，不会刷屏）
+            if (result.fen != engineRowFen) {
+                engineRowFen = result.fen
+                engineRowStartTs = System.currentTimeMillis()
+                engineRowDepth = -1
+            }
+            if (depth != engineRowDepth) {
+                engineRowDepth = depth
+                diagLog?.appendEngine(result.fen, depth,
+                    System.currentTimeMillis() - engineRowStartTs, result.bestUcci, done = false)
+            }
         }
 
         override fun onSearchDone(result: AnalysisResult) {
             if (result.fen != currentFen) return
             lastAnalysis = result
             searchSettled = true
+            diagLog?.appendEngine(result.fen, result.bestLine?.depth ?: 0,
+                System.currentTimeMillis() - engineRowStartTs, result.bestUcci, done = true)
             // 状态文案回"识别中"并渲染（成熟度翻转暂定→定着由渲染体现）；
             // setStatus 内部统一走 postRender 管线，重复 postRender 已合并，无双渲染
             setStatus("识别中")
@@ -1036,6 +1206,7 @@ class ScreenAssistService : Service() {
 
         override fun onEngineError(message: String) {
             Log.w(TAG, "engine error: $message")
+            diagLog?.appendEvent("引擎异常", if (message.length > 40) message.take(40) + "…" else message)
             if (overlayClosed) return
             // 引擎已不可用：错误显示到状态栏与通知栏，不再静默（超长信息截断，避免占满左列）
             engineReady = false
@@ -1358,6 +1529,7 @@ class ScreenAssistService : Service() {
         val (name, depth) = strengthLevels[strengthIndex]
         config.searchDepth = depth
         analysisEngine?.setSearchDepth(depth)
+        diagLog?.appendEvent("档位", "引擎强度→$name（深度 $depth）")
         postRender()
         setStatus("引擎强度：$name")
     }
@@ -1368,6 +1540,7 @@ class ScreenAssistService : Service() {
         val mb = hashLevels[hashIndex]
         config.hashMb = mb
         analysisEngine?.setHash(mb)
+        diagLog?.appendEvent("档位", "Hash→${mb}MB")
         postRender()
         setStatus("引擎 Hash：${mb}MB")
     }
@@ -1378,8 +1551,11 @@ class ScreenAssistService : Service() {
         val (name, ms) = timeLevels[timeIndex]
         config.searchTimeMs = ms
         analysisEngine?.setSearchMode(AnalysisEngine.SearchMode.TIME, ms)
+        diagLog?.appendEvent("档位", "思考时长→$name")
         postRender()
-        setStatus("思考时长：$name")
+        // 提示机制性代价：时间制每步固定烧满设定时长（与深度制"简单局面秒收"体感
+        // 差异大，曾有用户误判为"推理变慢"故障）
+        setStatus("思考时长：$name（时间制每步固定烧满该时长，深度制可秒收）")
     }
 
     /**
@@ -1393,6 +1569,7 @@ class ScreenAssistService : Service() {
         analysisEngine?.setSearchMode(
             if (isTime) AnalysisEngine.SearchMode.TIME else AnalysisEngine.SearchMode.DEPTH,
             config.searchTimeMs)
+        diagLog?.appendEvent("档位", "搜索制式→${if (isTime) "时间制" else "深度制"}")
         postRender()
     }
 
@@ -1405,10 +1582,13 @@ class ScreenAssistService : Service() {
         multiPv = multiPv % 3 + 1
         config.multiPv = multiPv
         analysisEngine?.setMultiPv(multiPv)
+        diagLog?.appendEvent("档位", "变招→${multiPv} 路")
         postRender()
         setStatus(
             if (multiPv == 1) "变招：1 路（算力最全）"
-            else "变招：$multiPv 路（附${multiPv - 1}个备选，算力摊薄）"
+            // 量化代价：MultiPV>1 根节点多路并行展开，同深度搜索明显变慢（引擎机制，
+            // Cabinet 引擎层注释同口径），供用户在"候选展示"与"出招速度"间权衡
+            else "变招：$multiPv 路（附${multiPv - 1}个备选，同深度搜索约慢一半）"
         )
     }
 
@@ -1671,6 +1851,11 @@ class ScreenAssistService : Service() {
         // 先停 worker 再释放识别器：worker 可能仍在 detect/recognize 中途，
         // close 与 run 并发会让识别静默停摆至销毁
         workerThread.quitSafely()
+        // 诊断文件封口（worker 已停，不会再有写行并发；开着开关被系统杀服务时
+        // 文件仍以"结束行"收尾，用户取到的数据完整）
+        diagLog?.appendEvent("服务停止", "onDestroy")
+        diagLog?.close()
+        diagLog = null
         yoloDetector?.close()
         yoloDetector = null
         // 与 loader 线程同锁：loader 在 synchronized(onnxEngineLock) 内赋值 onnxEngine，
@@ -1681,6 +1866,10 @@ class ScreenAssistService : Service() {
         }
         analysisEngine?.shutdown()
         analysisEngine = null
+        // 桔库 SQLite 句柄关闭（worker 已 quitSafely，在途查库完成后执行）：
+        // 服务反复启停每次泄漏一个 SQLiteDatabase，累计触发系统 SQLite 缓存上限
+        openBook?.close()
+        openBook = null
         overlayPanel?.let { p ->
             // 窗口可能已被系统先行移除：runCatching（与 CLOSE 路径同款）
             runCatching { windowManager?.removeView(p) }

@@ -182,25 +182,6 @@ public class ExternalEngine extends UCIEngineBase {
         }
     }
 
-    private boolean optionsInitialized = false;
-
-    @Override
-    public void initConfig(EngineConfig engineConfig) {
-        super.initConfig(engineConfig);
-        optionsInitialized = true;
-    }
-
-    @Override
-    public boolean configOk(EngineConfig engineConfig) {
-        return optionsInitialized;
-    }
-
-    // this could be overrided by subclass
-    @Override
-    protected File getIniFile() {
-        return new File(engineFileName.getAbsolutePath() + ".ini");
-    }
-
     @Override
     public String readLineFromEngine(int timeoutMillis) {
         String ret = inLines.readLine(timeoutMillis);

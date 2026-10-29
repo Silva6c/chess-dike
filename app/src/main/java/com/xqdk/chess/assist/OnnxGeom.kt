@@ -183,14 +183,8 @@ object OnnxGeom {
         }
     }
 
-    /** 透视重映射：h33 为 forward（源→输出）单应，语义与 OpenCV warpPerspective 一致 */
-    fun warpPerspective(px: IntArray, w: Int, h: Int, h33: DoubleArray, outW: Int, outH: Int): IntArray {
-        val out = IntArray(outW * outH)
-        warpPerspectiveInto(px, w, h, h33, outW, outH, out)
-        return out
-    }
-
-    /** 复用输出缓冲版 [warpPerspective]：识别热路径用，dst 长度须为 outW*outH。
+    /** 透视重映射（h33 为 forward 源→输出单应，语义与 OpenCV warpPerspective 一致）：
+     *  识别热路径唯一入口，dst 长度须为 outW*outH。
      *  性能注记（450×500 每帧 22.5 万像素）：行内 dy 项预乘出循环，除法从每像素
      *  两次并为一次求倒数 + 两次乘法（除法比乘法贵一个量级）；恒等变换（den=1）
      *  下与原实现 bit 级一致，一般情形坐标误差 ≤1ulp，采样值在近似断言容差内 */

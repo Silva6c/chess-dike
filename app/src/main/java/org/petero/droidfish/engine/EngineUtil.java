@@ -24,14 +24,17 @@ public class EngineUtil {
     }
 
     /**
-     * Executes chmod 744 exePath.
-     */
-    static native boolean chmod(String exePath);
-
-    /**
      * Change the priority of a process.
      */
     static native void reNice(int pid, int prio);
+
+    /**
+     * SIMD/点积特性检测（nativeutil.cpp 已有实现，此前零调用）：
+     * aarch64 返回 ASIMDDP（dotprod）支持位——dotprod 引擎的 NNUE int8 点积
+     * 走专用指令，不支持的设备上运行会 SIGILL，选错变体后果是崩溃而非变慢。
+     * x86 分支语义为 SSE4.1（转译环境不依赖本检测结果）。
+     */
+    static native boolean isSimdSupported();
 
     /**
      * For synchronizing non thread safe native calls.

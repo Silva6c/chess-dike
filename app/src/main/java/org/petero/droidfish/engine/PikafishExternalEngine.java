@@ -39,25 +39,43 @@ import java.util.Locale;
  * so you will see lots of legacy codes here
  */
 public class PikafishExternalEngine extends ExternalEngine {
-    private static final String iniFileName = "libpikafish.ini.so";
-
     private static final String[] optionNames = {"evalfile"};
     private static final String[] optionValues = {"libpikafish.nnue.so"};
 
-    // PikafishEngineFile: the name of the engine file in /data/lib directory, two flavors:
-    // pikafish-armv8
-    // pikafish-armv8-dotprod
+    // 引擎变体运行时自动选择的候选文件（两个 so 均随包分发在 nativeLibraryDir）：
+    // dotprod（ARMv8.2 ASIMDDP）机型的 NNUE int8 点积走专用指令，基础变体慢数倍；
+    // 反之在不支持 dotprod 的设备上运行 dotprod 引擎会 SIGILL——按 CPU 特性选，
+    // 不再依赖用户装对 flavor
+    private static final String PikafishEngineFileArmv8 = "libpikafish-armv8.so";
+    private static final String PikafishEngineFileDotprod = "libpikafish-armv8-dotprod.so";
+    // flavor 构建字段降级为自动选择失败时的回退值（保持产物命名与历史行为兼容）
     private static final String PikafishEngineFile = BuildConfig.PIKAFISH_ENGINE_FILE;
 
     private final String nativeLibraryDir = ChessApp.getContext().getApplicationInfo().nativeLibraryDir;
 
-    public PikafishExternalEngine(String workDir, EngineListener listener) {
-        super("pikafish", workDir, listener);
+    /**
+     * 引擎文件运行时自动选择：优先按 ASIMDDP 特性选 dotprod/armv8 变体；
+     * 检测异常（native 库加载失败等）回退 flavor 配置值；所选文件不存在时
+     * 再回退 flavor 配置值（防打包形态变化后指向缺失文件）。
+     */
+    private File engineFile() {
+        boolean dotprod;
+        try {
+            dotprod = EngineUtil.isSimdSupported();
+        } catch (Throwable t) {
+            Log.w("ExternalPikafishEngine", "simd detect failed, fallback to flavor config", t);
+            dotprod = PikafishEngineFile.contains("dotprod");
+        }
+        String name = dotprod ? PikafishEngineFileDotprod : PikafishEngineFileArmv8;
+        File f = new File(nativeLibraryDir, name);
+        if (!f.exists()) f = new File(nativeLibraryDir, PikafishEngineFile);
+        Log.i("ExternalPikafishEngine", "engine variant: " + f.getName()
+                + " (dotprod=" + dotprod + ")");
+        return f;
     }
 
-    @Override
-    protected File getIniFile() {
-        return new File(nativeLibraryDir, iniFileName);
+    public PikafishExternalEngine(String workDir, EngineListener listener) {
+        super("pikafish", workDir, listener);
     }
 
     /**
@@ -101,8 +119,7 @@ public class PikafishExternalEngine extends ExternalEngine {
     protected String copyFile(File from, File exeDir) throws IOException {
         // now this method does not copy file any longer,
         // it just use files in data/lib/ folder
-        File to = new File(nativeLibraryDir, PikafishEngineFile);
-        return to.getAbsolutePath();
+        return engineFile().getAbsolutePath();
     }
 
     @Override

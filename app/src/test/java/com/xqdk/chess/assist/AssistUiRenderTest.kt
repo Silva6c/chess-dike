@@ -75,7 +75,7 @@ class AssistUiRenderTest {
         // 识别进行中 → 琥珀行波
         assertEquals(AssistState.RUNNING_WAVE, AssistStateMap.fromStatusText("识别中"))
         assertEquals(AssistState.RUNNING_WAVE, AssistStateMap.fromStatusText("正在识别棋盘…\n请让棋盘完整无遮挡"))
-        // 其余运行态（思考/预热/手动/轮到）→ 琥珀恒亮
+        // 其余运行态（思考/预热/手动/轮到）→ 玉绿恒亮（与琥珀行波区分，四态四色）
         assertEquals(AssistState.RUNNING_STILL, AssistStateMap.fromStatusText("引擎思考中…"))
         assertEquals(AssistState.RUNNING_STILL, AssistStateMap.fromStatusText("引擎预热中…"))
         assertEquals(AssistState.RUNNING_STILL, AssistStateMap.fromStatusText("手动模式（再点手动退出）"))

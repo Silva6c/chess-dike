@@ -166,7 +166,7 @@
                 tools:ignore="HardcodedText" />
         </LinearLayout>
 
-        <!-- ③ 屏幕录制：静态说明行（录屏授权由主按钮按需拉起），运行中由代码点亮 -->
+        <!-- ③ 屏幕录制：静态说明行（需要时由主按钮拉起授权），运行中由代码点亮 -->
         <LinearLayout
             android:id="@+id/step_capture_row"
             style="@style/StepRow"
@@ -198,14 +198,14 @@
                 <TextView
                     android:id="@+id/step_capture_hint"
                     style="@style/StepHint"
-                    android:text="点击下方按钮时按需申请，全程本地处理"
+                    android:text="点击下方按钮时申请，全程本地处理"
                     tools:ignore="HardcodedText" />
             </LinearLayout>
 
             <TextView
                 android:id="@+id/step_capture_chip"
                 style="@style/StepChip"
-                android:text="按需"
+                android:text="未启动"
                 tools:ignore="HardcodedText" />
         </LinearLayout>
 
@@ -343,6 +343,60 @@
                     android:text="时间制"
                     tools:ignore="HardcodedText" />
             </RadioGroup>
+        </LinearLayout>
+
+        <!-- 性能诊断：识别分段计时日志开关（默认关，开启后 ONNX 重建并输出五段
+             耗时到 logcat）。诊断用途，真机排查识别耗时用，平时关闭零开销 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="性能诊断"
+                android:textColor="@color/xq_ink_text"
+                android:textSize="13sp"
+                tools:ignore="HardcodedText" />
+
+            <Button
+                android:id="@+id/btn_bench_profiling"
+                style="@style/ValueChip"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="关"
+                tools:ignore="HardcodedText" />
+        </LinearLayout>
+
+        <!-- 检查更新：仅手动触发（无启动自检/后台轮询），查 GitHub 正式 stable
+             Release 与构建日期比较；结果弹窗/Toast，新版跳 Release 页手动下载 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="检查更新"
+                android:textColor="@color/xq_ink_text"
+                android:textSize="13sp"
+                tools:ignore="HardcodedText" />
+
+            <Button
+                android:id="@+id/btn_check_update"
+                style="@style/ValueChip"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="检查"
+                tools:ignore="HardcodedText" />
         </LinearLayout>
 
         <!-- 合规声明（原段落文案语义全保留） -->

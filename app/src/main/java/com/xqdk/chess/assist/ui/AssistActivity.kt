@@ -266,8 +266,79 @@ class AssistActivity : AppCompatActivity() {
             service?.setSearchMode(isTime)
         }
 
+        // 性能诊断：识别分段计时日志开关（真机排查识别耗时用）——logcat 过滤
+        // AssistService，同时落盘到 Download 目录的 md 文件（服务返回文件路径，
+        // Toast 标明位置，用户从文件管理器直接取）。服务未绑定（停服中）也先落盘
+        // 配置，服务启动时读到即生效；服务在线则即时重建 ONNX 引擎（分段计时是
+        // 识别器构造参数）
+        val btnBench = findViewById<Button>(R.id.btn_bench_profiling)
+        btnBench.text = if (cfg.benchProfiling) "开" else "关"
+        btnBench.setOnClickListener {
+            val on = !cfg.benchProfiling
+            cfg.benchProfiling = on
+            btnBench.text = if (on) "开" else "关"
+            val svc = service
+            if (svc != null) {
+                val path = svc.setBenchProfiling(on)
+                Toast.makeText(this, when {
+                    on && path != null -> "诊断已开启：$path\n（关闭时自动封口，可直接发送该文件）"
+                    on -> "诊断已开启：文件创建失败，请用 logcat 过滤 AssistService 采集"
+                    else -> "诊断已关闭，文件已封口"
+                }, if (on) Toast.LENGTH_LONG else Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "已保存，下次启动识别时生效", Toast.LENGTH_SHORT).show()
+            }
+        }
+
         // bindService 返回值决定是否需要解绑：绑定失败仍置 bound 会在 onDestroy 泄漏连接
         bound = bindService(Intent(this, ScreenAssistService::class.java), connection, Context.BIND_AUTO_CREATE)
+
+        // 检查更新：仅手动触发（不主动检查是产品拍板）。查询走独立线程
+        // （AppUpdateChecker.fetchReleasesJson 为网络 IO，3s 超时），结果回主线程
+        // 弹窗/Toast；按钮检查期间禁用防重复点击。失败如实提示——
+        // api.github.com 在中国大陆通常需可访问 GitHub 的网络环境
+        val btnUpdate = findViewById<Button>(R.id.btn_check_update)
+        btnUpdate.setOnClickListener {
+            btnUpdate.isEnabled = false
+            btnUpdate.text = "检查中…"
+            val checker = com.xqdk.chess.assist.AppUpdateChecker(
+                com.xqdk.chess.BuildConfig.BUILD_DATE
+            )
+            // 一次性线程（查询完毕自然回收，不留滞留池）
+            Thread {
+                val result = checker.check()
+                runOnUiThread {
+                    btnUpdate.isEnabled = true
+                    btnUpdate.text = "检查"
+                    when (result) {
+                        is com.xqdk.chess.assist.UpdateResult.UpToDate ->
+                            Toast.makeText(this,
+                                "已是最新版本（构建日期 ${com.xqdk.chess.BuildConfig.BUILD_DATE}）",
+                                Toast.LENGTH_SHORT).show()
+                        is com.xqdk.chess.assist.UpdateResult.Newer ->
+                            androidx.appcompat.app.AlertDialog.Builder(this)
+                                .setTitle("发现新版本 ${result.tag}")
+                                .setMessage(
+                                    "最新稳定版发布于 ${result.date}（当前构建 ${com.xqdk.chess.BuildConfig.BUILD_DATE}）。\n\n" +
+                                    "APK 请从 GitHub Release 页面下载安装（需要可访问 GitHub 的网络环境；" +
+                                    "下载后如与已装包签名不同，需卸载重装）。"
+                                )
+                                .setPositiveButton("打开下载页") { _, _ ->
+                                    runCatching {
+                                        startActivity(
+                                            Intent(Intent.ACTION_VIEW, Uri.parse(
+                                                com.xqdk.chess.assist.AppUpdateChecker.RELEASES_PAGE))
+                                        )
+                                    }
+                                }
+                                .setNegativeButton("取消", null)
+                                .show()
+                        is com.xqdk.chess.assist.UpdateResult.Failure ->
+                            Toast.makeText(this, result.message, Toast.LENGTH_LONG).show()
+                    }
+                }
+            }.start()
+        }
     }
 
     override fun onResume() {
@@ -293,9 +364,15 @@ class AssistActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        // 用户主动退出连线页（返回键 / 免责"不同意退出"）= 明确的结束意图：随退停服务，
+        // 不留"前台服务 + 录屏 + 悬浮窗"三件套残留——否则下次打开 App 悬浮窗自动出现
+        // （用户实测 bug：首次使用后退出，再开软件面板已在屏上）。stopSelf 在仍有绑定
+        // 时只是挂起，随后 unbind 才真正销毁服务，顺序不能反。
+        // 配置重建（旋转）isFinishing=false 不受影响；按 Home 切去象棋 App 走 onStop
+        // 不销毁本页，悬浮窗指导照常存活。
+        if (isFinishing) service?.stopGuidance()
         if (bound) unbindService(connection)
         super.onDestroy()
-        // 服务继续运行（前台服务），仅解绑
     }
 
     private fun startCaptureService() {
@@ -470,7 +547,7 @@ class AssistActivity : AppCompatActivity() {
 
         setStep(stepCaptureNum, stepCaptureChip,
             if (running) StepState.DONE else StepState.LOCKED,
-            if (running) "运行中" else "按需")
+            if (running) "运行中" else "未启动")
 
         setMainButton(if (running) MainBtnState.RUNNING else MainBtnState.IDLE)
 

@@ -14,8 +14,10 @@ import kotlin.math.cos
  *
  * - 主页 = 静态装饰：默认 [AssistState.IDLE]（待机墨 10% 恒静），不带语义；
  * - 连线页 = 全 App 唯一语义仪器面：待机墨恒静 → 识别中琥珀逐点 80ms 错峰
- *   （[AssistState.RUNNING_WAVE]，行波周期 2.4s）→ 等待/思考琥珀恒亮
- *   （RUNNING_STILL）→ 引擎异常警示红（ERROR）。
+ *   （[AssistState.RUNNING_WAVE]，行波周期 2.4s）→ 等待/思考玉绿恒亮
+ *   （RUNNING_STILL，与琥珀行波区分开——四态四色可辨）→ 引擎异常警示红（ERROR）。
+ * - 几何随视图实际尺寸缩放（列距铺满可用宽、行距铺满可用高，点半径随行距等比），
+ *   不是固定格距居中摆放——大屏铺得开、小屏收得拢。
  *
  * 动效预算纪律（终稿 §2.3：全 App 仅三处动效）：本视图只有"逐点错峰"一种动画，
  * 由 [setAssistState] 驱动，同态重复调用零开销（no-op），退出即停 animator。
@@ -36,9 +38,21 @@ class AssistDotGridView @JvmOverloads constructor(
     }
 
     private val density = resources.displayMetrics.density
-    private val dotRadius = 1.4f * density
-    private val colGap = 28f * density
-    private val rowGap = 5f * density
+
+    // 绘制几何随视图实际尺寸缩放（onSizeChanged 重算）；以下初值仅为 0 尺寸兜底
+    private var drawRadius = 1.4f * density
+    private var drawColGap = 28f * density
+    private var drawRowGap = 5f * density
+
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        if (w <= 0 || h <= 0) return
+        // 边点内缩一个半径防裁边；列距/行距由可用宽高均分（铺满），点半径随行距
+        // 等比并钳制——极端宽/高比下点不至于小到不可见或大到成球
+        drawRadius = (h / ROWS.toFloat() * 0.3f).coerceIn(1.0f * density, 3.0f * density)
+        drawColGap = (w - 2 * drawRadius) / (COLS - 1)
+        drawRowGap = (h - 2 * drawRadius) / (ROWS - 1)
+    }
 
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
 
@@ -76,26 +90,26 @@ class AssistDotGridView @JvmOverloads constructor(
     }
 
     override fun onDraw(canvas: Canvas) {
-        val gridW = (COLS - 1) * colGap
-        val gridH = (ROWS - 1) * rowGap
+        val gridW = (COLS - 1) * drawColGap
+        val gridH = (ROWS - 1) * drawRowGap
         val startX = (width - gridW) / 2f
         val startY = (height - gridH) / 2f
         var i = 0
         for (row in 0 until ROWS) {
-            val y = startY + row * rowGap
+            val y = startY + row * drawRowGap
             for (col in 0 until COLS) {
-                val x = startX + col * colGap
+                val x = startX + col * drawColGap
                 paint.color = dotColor(i)
-                canvas.drawCircle(x, y, dotRadius, paint)
+                canvas.drawCircle(x, y, drawRadius, paint)
                 i++
             }
         }
     }
 
-    /** 各语义态的点色（纸档 token，与视觉稿点阵四态一致） */
+    /** 各语义态的点色（纸档 token，四态四色：墨/琥珀行波/玉绿/警示红） */
     private fun dotColor(index: Int): Int = when (state) {
         AssistState.IDLE -> 0x1A292D2A // 待机墨 10% 恒静
-        AssistState.RUNNING_STILL -> 0xD99A5B00.toInt() // 等待/思考/手动：琥珀恒亮
+        AssistState.RUNNING_STILL -> 0xE62E7D32.toInt() // 等待/思考/手动：玉绿恒亮
         AssistState.ERROR -> 0xE6C62828.toInt() // 引擎异常：警示红
         AssistState.RUNNING_WAVE -> {
             // 识别中：琥珀逐点亮——0.35 基亮 + 行波峰 0.85（80ms/点错峰）

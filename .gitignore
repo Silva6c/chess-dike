@@ -2,6 +2,9 @@
 .gradle/
 build/
 
+# 本机 APK 交付目录（一键门禁把最新产物复制到仓库根 apk/，永不入库）
+/apk/
+
 # Local configuration file (sdk path, etc)
 local.properties
 
@@ -56,6 +59,12 @@ docs/*prompt.md
 
 # 工程交接文档（内部工作文件）不入公开仓库；本地保留维护
 docs/engineer-handoff.md
+
+# 设计文档与视觉稿（内部工作文件，拍板前不入库；定稿后若转为用户面文档再调整边界）
+docs/设计-*
+
+# ZCode 会话目录（计划文件等 AI 工具产物，绝不入公开仓库）
+.zcode/
 
 # 本地备份目录（G 盘删除前的完整备份），绝不入公开仓库
 G-backup/

@@ -2,14 +2,14 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-
     <!-- 连线（屏幕识别 · 悬浮窗指导）所需权限：录屏与悬浮窗均为常规系统能力 -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 唯一网络用途：连线页"检查更新"按钮手动查询 GitHub releases 元数据
+         （用户主动触发、不自动检查、不内置下载）；识别/引擎/开局库/帮助页全部本地 -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:name=".ChessApp"

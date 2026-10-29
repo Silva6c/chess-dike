@@ -5,6 +5,8 @@
      右列 = 值芯片（深度/哈希）＋ 动作按钮（更新/停止/关闭）两级分权。
      列宽 114/171/90 与内外距（6+114+2+2+171+2+90+6）不得改动——ScreenAssistService
      按 392×197dp 计算默认位置与遮挡判定（⚠ 代码注释加和是 393，以代码值 dp(392) 为准）。
+     面板高度契约：根布局 wrap_content 但所有文本行均钳行数（headline≤2、其余≤1，
+     超长省略号截断）——信息多时面板不得被撑高，高度恒由右列/棋盘决定。
      真背景层 = 本根节点 overlay_root（id 对应 bgLayer）：悬浮窗窗口 root（OverlayPanelView）
      自身的 background 运行期替换不生效，换肤一律改这一层 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -43,7 +45,9 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="5dp"
-                android:layout_weight="1" />
+                android:layout_weight="1"
+                android:maxLines="1"
+                android:ellipsize="end" />
         </LinearLayout>
 
         <!-- 遮挡提醒：悬浮窗盖住已定位棋盘时显示（FLAG_SECURE 后不影响识别但挡视线，
@@ -54,16 +58,20 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="3dp"
+            android:maxLines="1"
+            android:ellipsize="end"
             android:text="挡住棋盘，建议移开"
             android:visibility="gone" />
 
-        <!-- 主状态大字：轮到我方走 / 已停止指导 / 引擎异常… -->
+        <!-- 主状态大字：轮到我方走 / 已停止指导 / 引擎异常…（≤2 行，超长省略号截断） -->
         <TextView
             android:id="@+id/overlay_status"
             style="@style/OverlayHeadline"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
+            android:maxLines="2"
+            android:ellipsize="end"
             android:text="识别中" />
 
         <!-- 优势行：红方优势 +0.8（占优玉绿 / 劣势警示红） -->
@@ -73,6 +81,8 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="2dp"
+            android:maxLines="1"
+            android:ellipsize="end"
             android:textColor="@color/qi_jade_text"
             android:visibility="gone" />
 
@@ -90,6 +100,8 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
+            android:maxLines="1"
+            android:ellipsize="end"
             android:textColor="@color/qi_ivory"
             android:visibility="gone" />
 

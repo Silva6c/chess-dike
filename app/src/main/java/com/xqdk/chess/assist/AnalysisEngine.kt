@@ -53,10 +53,6 @@ class AnalysisEngine(
             Log.w(tag, "engine error: $errMsg")
             listener.onEngineError(errMsg ?: "引擎错误")
         }
-        override fun notifyEngineName(engineName: String?) {}
-        override fun notifySearchResult(searchId: Int, bestMove: String?, nextPonderMove: String?) {}
-        override fun notifyEvalResult(searchId: Int, eval: Float) {}
-        override fun notifyEngineInitialized() {}
     }
 
     @Volatile private var engine: UCIEngine? = null
@@ -225,13 +221,16 @@ class AnalysisEngine(
         }
         if (!uciok) throw IllegalStateException("引擎握手超时（uciok），多为 CPU/兼容性问题")
 
-        // 与游戏内 ComputerPlayer 一致：uciok 后必须调用 initConfig 标记配置完成，
-        // 否则 ExternalEngine 的启动看门狗会在 10 秒后误报 "UCI protocol error"
+        // uciok 后必须调用 initConfig：ExternalEngine 的启动看门狗据此认为
+        // UCI 握手完成，否则会在 10 秒后误报 "UCI protocol error"
         eng.initConfig(ec)
 
         // 配置：权重/线程/Hash/多路PV（配置热更新口径）
         eng.setOption("EvalFile", "libpikafish.nnue.so")
-        eng.setOption("Threads", Runtime.getRuntime().availableProcessors())
+        // 线程数 = 核数一半（Cabinet 电脑端 autoThreads 同口径，UCI 官方建议
+        // "最大值减 1~2"）：此前全核深搜与 ONNX 4 线程识别并发时 CPU 满载温控
+        // 降频，识别与搜索双双变慢；留一半核给识别与系统，nps 损失远小于温控收益
+        eng.setOption("Threads", maxOf(2, Runtime.getRuntime().availableProcessors() / 2))
         eng.setOption("Hash", hashMb)
         eng.setOption("MultiPV", maxPv)
         appliedHash = hashMb

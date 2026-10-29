@@ -76,7 +76,7 @@
         <item name="android:ellipsize">end</item>
     </style>
 
-    <!-- 状态胶囊（已就绪/去授予/按需/运行中）：pill 描边，边框与文字色由代码回填 -->
+    <!-- 状态胶囊（已就绪/去授予/未启动/运行中）：pill 描边，边框与文字色由代码回填 -->
     <style name="StepChip" parent="">
         <item name="android:layout_width">wrap_content</item>
         <item name="android:layout_height">wrap_content</item>
@@ -151,7 +151,7 @@
     <!-- 候选/预案行：建议 炮二平五 ✓（点阵折进尾部，见 OverlayPanelView） -->
     <style name="OverlayCandidate">
         <item name="android:textSize">12sp</item>
-        <item name="android:maxLines">2</item>
+        <item name="android:maxLines">1</item>
         <item name="android:ellipsize">end</item>
     </style>
 

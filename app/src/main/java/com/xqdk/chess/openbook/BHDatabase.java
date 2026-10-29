@@ -18,7 +18,6 @@ public class BHDatabase extends SQLiteAssetHelper {
 //                       [vmemo] BLOB,
 //                       [vindex] INTEGER)
 
-    public static final String OPENBOOK_NAME = "桔库09.09.2023精修库";
     private static final String DATABASE_NAME = "桔库09.09.2023精修库.obk";
     private static final int DATABASE_VERSION = 15;
 

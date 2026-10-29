@@ -48,7 +48,15 @@ android {
         // 会让装过 vc43 的设备判版本降级、装不上（参照内阁 coerceAtLeast 做法）。
         // 提交数超过 43 后本行自动失效，只增不减。
         versionCode = gitCommitCount.coerceAtLeast(43)
-        versionName = "3.0"
+        versionName = "3.1"
+        // 构建日期（yyyyMMdd）：检查更新的版本比较依据——公开仓"稳定版=一笔提交"
+        // 会强推压平，versionCode（=提交数）随压平回落、前后不可比，与 cabinet
+        // 同款用"tag 日期 vs 构建日期"恒单调比较。CI 为 UTC 时区，与用户本地
+        // 打 tag 的日期可能差一天，仅影响发版当天自查的边界场景，无实害
+        buildConfigField(
+            "String", "BUILD_DATE",
+            "\"${SimpleDateFormat("yyyyMMdd").format(Date())}\""
+        )
 
         ndk {
             // 只发 arm64-v8a（真机交付唯一目标；2026-10-28 用户拍板"删 ABI 减体积"，
@@ -83,6 +91,9 @@ android {
             dimension = "pikafish"
             buildConfigField("String", "PIKAFISH_ENGINE_FILE", "\"libpikafish-armv8-dotprod.so\"")
         }
+        // 两变体的引擎 so 均随包分发（nativeLibsToJar 全量打包 src/main/pikafish/），
+        // 运行时由 PikafishExternalEngine.engineFile() 按 CPU 特性自动选择；
+        // 本字段仅作自动选择失败时的回退与产物命名区分
     }
 
     // https://gist.github.com/mileskrell/7074c10cb3298a2c9d75e733be7061c2
@@ -116,7 +127,7 @@ android {
         jvmTarget = "17"
     }
     buildFeatures {
-        viewBinding = true
+        // viewBinding 关闭：全工程 findViewById，从无 Binding 类引用（2026-10-30 死代码清理）
     }
     testOptions {
         unitTests {
@@ -153,7 +164,9 @@ tasks.register<Jar>("nativeLibsToJar") {
     destinationDirectory.set(layout.buildDirectory.dir("native-libs"))
     archiveBaseName.set("native-libs")
     from(fileTree("src/main/pikafish/") {
-        include("**/*")
+        // 只打 arm64 引擎文件（abiFilters 同口径）：此前的 **/* 会把其他 ABI
+        // 的占位 txt 一并打进 APK，属死重（2026-10-30 死代码清理）
+        include("arm64-v8a/*")
     })
     into("lib/")
 }

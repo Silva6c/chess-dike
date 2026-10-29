@@ -24,7 +24,7 @@
 | 组件 | 版本 | 许可 |
 |---|---|---|
 | tensorflow-lite | 2.14.0 | Apache-2.0（本机缓存 POM 已核实） |
-| onnxruntime-android | 1.17.1 | MIT（本机缓存 POM 已核实） |
+| onnxruntime-android | 1.31.1 | MIT（升级后以官方声明为准，1.x 全系 MIT） |
 | sqliteassethelper | 2.0.1 | Apache-2.0 |
 | androidx / material / kotlin stdlib 等 | 见 libs.versions.toml | Apache-2.0 |
 | Robolectric（仅测试） | 4.14.1 | MIT |

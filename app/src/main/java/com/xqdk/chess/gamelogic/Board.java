@@ -13,7 +13,6 @@ public class Board implements Serializable {
 
     public boolean bRedGo = true;
     public int rounds = 1;
-    public float score = 0;
     static public int BOARD_PIECE_WIDTH = 9;
     static public int BOARD_PIECE_HEIGHT = 10;
 
@@ -46,7 +45,6 @@ public class Board implements Serializable {
     public Board(Board b) {
         this.bRedGo = b.bRedGo;
         this.rounds = b.rounds;
-        this.score = b.score;
         for (int i = 0; i < this.piece.length; i++) {
             this.piece[i] = b.piece[i].clone();
         }
@@ -61,29 +59,6 @@ public class Board implements Serializable {
         }
     }
 
-    public boolean doMove(Move move){
-        if(move == null) return false;
-
-        Position start = move.fromPosition;
-        Position end = move.toPosition;
-        if(!isValidPosition(start) || !isValidPosition(end)) return false;
-
-        int piece = getPieceByPosition(start);
-        if (!Piece.isValid(piece)) {
-            return false;
-        }
-
-        // move piece to end position
-        setPieceByPosition(end, piece);
-        // clear start position
-        setPieceByPosition(start, Piece.EMPTY);
-        bRedGo = !bRedGo;
-        rounds++;
-        return true;
-    }
-
-
-
     /*
     * Set piece value by position， it should not be called directly
      */
@@ -91,16 +66,6 @@ public class Board implements Serializable {
         if (isValidPosition(pos)) {
             if(value == Piece.EMPTY || Piece.isValid(value)){
                 piece[pos.y][pos.x] = value;
-                return true;
-            }
-        }
-        return false;
-    }
-
-    public boolean setPieceByPosition(int x, int y, int value) {
-        if (x >= 0 && x < BOARD_PIECE_WIDTH && y >= 0 && y < BOARD_PIECE_HEIGHT) {
-            if (value == Piece.EMPTY || Piece.isValid(value)) {
-                piece[y][x] = value;
                 return true;
             }
         }
@@ -160,10 +125,6 @@ public class Board implements Serializable {
         }
         String result = String.format("%s %s - - %s %s", fen, bRedGo ? "w" : "b", 0, rounds);
         return result;
-    }
-
-    public long getZobrist(boolean redGo) {
-        return Zobrist.getZobristFromBoard(piece, redGo);
     }
 
     public boolean restoreFromFEN(String fenString) {

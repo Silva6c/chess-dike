@@ -12,12 +12,14 @@ import android.view.View
 import android.view.animation.LinearInterpolator
 import androidx.core.content.ContextCompat
 import com.xqdk.chess.R
+import kotlin.math.cos
 
 /**
  * 河界线（美学终稿 §2.3 动效一"线的呼吸"）：1.5dp 朱砂横线。
- * 静态 = 纯色朱砂；运行态 = [setBreathing](true) 启动 2.4s 线性无限循环，
- * 亮段（#D97057，视觉稿 breath 关键帧色）沿 240% 渐变域平移，REPEAT 平铺保证循环无缝。
- * 动效预算纪律：本动画仅运行态出现，静止即停。
+ * 静态 = 纯色朱砂；运行态 = [setBreathing](true) 启动 2.4s 线性无限循环：
+ * 亮段（提亮朱砂 #E8936F）沿 240% 渐变域平移（REPEAT 平铺循环无缝），
+ * 叠加整线明暗脉动（透明度 55%↔100% 余弦一周期）——双通道叠加保证 1.5dp 细线上
+ * 呼吸肉眼可辨。动效预算纪律：本动画仅运行态出现，静止即停。
  */
 class RiverLineView @JvmOverloads constructor(
     context: Context,
@@ -29,8 +31,10 @@ class RiverLineView @JvmOverloads constructor(
         private const val PERIOD_MS = 2400L
         /** 渐变域宽度 = 视图宽 × 2.4（对齐视觉稿 background-size:240%） */
         private const val DOMAIN_SCALE = 2.4f
-        /** 呼吸亮峰色（视觉稿高亮段 #D97057） */
-        private const val ZHU_BRIGHT = 0xFFD97057.toInt()
+        /** 呼吸亮峰色（视觉稿高亮段 #D97057 再提亮一档，拉开与朱砂基色的对比） */
+        private const val ZHU_BRIGHT = 0xFFE8936F.toInt()
+        /** 整线明暗脉动的透明度下限（0.55↔1.0） */
+        private const val ALPHA_MIN = 0.55f
     }
 
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -50,6 +54,7 @@ class RiverLineView @JvmOverloads constructor(
         } else {
             animator?.cancel()
             paint.shader = null
+            paint.alpha = 255
             invalidate()
         }
     }
@@ -57,7 +62,8 @@ class RiverLineView @JvmOverloads constructor(
     private fun buildShader(): LinearGradient = LinearGradient(
         0f, 0f, width * DOMAIN_SCALE, 0f,
         intArrayOf(paint.color, paint.color, ZHU_BRIGHT, paint.color, paint.color),
-        floatArrayOf(0f, 0.4f, 0.5f, 0.6f, 1f),
+        // 亮段占域 40%（0.3–0.7）：窄段在 1.5dp 线上存在感不足
+        floatArrayOf(0f, 0.3f, 0.5f, 0.7f, 1f),
         Shader.TileMode.REPEAT,
     )
 
@@ -80,9 +86,13 @@ class RiverLineView @JvmOverloads constructor(
 
     override fun onDraw(canvas: Canvas) {
         if (breathing && paint.shader != null) {
-            val shift = (animator?.animatedFraction ?: 0f) * width * DOMAIN_SCALE
+            val f = animator?.animatedFraction ?: 0f
+            val shift = f * width * DOMAIN_SCALE
             shaderMatrix.setTranslate(-shift, 0f)
             paint.shader.setLocalMatrix(shaderMatrix)
+            // 整线明暗呼吸：透明度 0.55↔1.0 余弦一周期（首尾同值，循环无缝）
+            val breath = ALPHA_MIN + (1f - ALPHA_MIN) * 0.5f * (1f - cos(2.0 * Math.PI * f).toFloat())
+            paint.alpha = (255f * breath).toInt().coerceIn(0, 255)
         }
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
     }

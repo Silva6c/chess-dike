@@ -52,10 +52,11 @@ class AssistConfig(context: Context) {
 
     /**
      * 引擎变招路数（MultiPV，1-3；悬浮窗左列"N变"按钮循环）。
-     * 1 路 = 全部算力集中最佳着（最强）；2-3 路附带给备选候选。默认 3（保留候选展示）。
+     * 1 路 = 全部算力集中最佳着（最强）；2-3 路附带给备选候选。默认 1（2026-10-30
+     * 用户拍板：算力全部给最佳着；要看备选再手动开 2-3 路，代价是同深度明显变慢）。
      */
     var multiPv: Int
-        get() = sp.getInt(KEY_MULTI_PV, 3).coerceIn(1, 3)
+        get() = sp.getInt(KEY_MULTI_PV, 1).coerceIn(1, 3)
         set(value) { sp.edit().putInt(KEY_MULTI_PV, value.coerceIn(1, 3)).apply() }
 
     /**

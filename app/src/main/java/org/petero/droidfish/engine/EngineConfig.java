@@ -19,8 +19,9 @@
 package org.petero.droidfish.engine;
 
 /**
- * Engine options.
- * This class is useless now, keep it just for avoiding too many changes
+ * 引擎启动参数。裁撤对弈页后唯一存活的字段是 workDir：getEngine() 工厂与
+ * initConfig() 握手链的参数载体（AnalysisEngine 传入空 workDir，引擎文件
+ * 直接从 nativeLibraryDir 运行）。
  */
 public final class EngineConfig {
     public String workDir;      // Working directory for engine process
@@ -28,9 +29,4 @@ public final class EngineConfig {
     public EngineConfig() {
         workDir = "";
     }
-
-    public EngineConfig(EngineConfig other) {
-        workDir = other.workDir;
-    }
-
 }

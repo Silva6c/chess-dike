@@ -22,21 +22,18 @@ import android.util.Log;
 
 import org.petero.droidfish.player.EngineListener;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Locale;
-import java.util.Map;
-import java.util.Properties;
-import java.util.TreeMap;
 
 public abstract class UCIEngineBase implements UCIEngine {
 
     private boolean processAlive;
     private UCIOptions AllOptions;
+    /**
+     * UCI 握手完成标记：initConfig() 置位，ExternalEngine 的启动看门狗
+     * （10 秒）据此判定引擎是否正常完成握手，未完成即上报 "UCI protocol error"。
+     */
     protected boolean isConfigOk;
 
     public static UCIEngine getEngine(String engine,
@@ -71,72 +68,6 @@ public abstract class UCIEngineBase implements UCIEngine {
         isConfigOk = true;
     }
 
-    @Override
-    public final void applyIniFile() {
-        File optionsFile = getIniFile();
-        Properties iniOptions = new Properties();
-        try (FileInputStream is = new FileInputStream(optionsFile)) {
-            iniOptions.load(is);
-        } catch (IOException | IllegalArgumentException e) {
-            Log.d("UCIEngineBase", "Failed to read options file: " + optionsFile);
-            Log.d("UCIEngineBase", e.toString());
-        }
-        Map<String, String> opts = new TreeMap<>();
-        for (Map.Entry<Object, Object> ent : iniOptions.entrySet()) {
-            if (ent.getKey() instanceof String && ent.getValue() instanceof String) {
-                String key = ((String) ent.getKey()).toLowerCase(Locale.US);
-                String value = (String) ent.getValue();
-                opts.put(key, value);
-            }
-        }
-        Log.d("UCIEngineBase", "Read " + opts.size() + " options from " + optionsFile);
-        Log.d("UCIEngineBase", opts.toString());
-        setUCIOptions(opts);
-    }
-
-    @Override
-    public final boolean setUCIOptions(Map<String, String> uciOptions) {
-        boolean modified = false;
-        for (Map.Entry<String, String> ent : uciOptions.entrySet()) {
-            String key = ent.getKey().toLowerCase(Locale.US);
-            String value = ent.getValue();
-            boolean editable = editableOption(key);
-            Log.d("UCIEngineBase", "setUCIOptions, key: " + key + ", value: " + value + ", editable: " + editable);
-            if (editable) {
-                // key should exist and configurable, and value is different with previous value
-                Log.d("UCIEngineBase", "setUCIOptions, key: " + key + ", value: " + value);
-                modified |= setOption(key, value);
-            }
-        }
-        return modified;
-    }
-
-    @Override
-    public final void saveIniFile(UCIOptions options) {
-        Properties iniOptions = new Properties();
-        for (String name : options.getOptionNames()) {
-            UCIOptions.OptionBase o = options.getOption(name);
-            if (editableOption(name) && o.modified())
-                iniOptions.put(o.name, o.getStringValue());
-        }
-        File optionsFile = getIniFile();
-        try (FileOutputStream os = new FileOutputStream(optionsFile)) {
-            iniOptions.store(os, null);
-        } catch (IOException ignore) {
-            Log.d("UCIEngineBase", "Failed to write options file: " + optionsFile);
-        }
-    }
-
-    @Override
-    public final UCIOptions getUCIOptions() {
-        return AllOptions;
-    }
-
-    /**
-     * Get engine UCI options file.
-     */
-    protected abstract File getIniFile();
-
     protected boolean editableOption(String name) {
         name = name.toLowerCase(Locale.US);
         String[] editable = {"hash", "threads"};
@@ -149,11 +80,6 @@ public abstract class UCIEngineBase implements UCIEngine {
             writeLineToEngine("quit");
             processAlive = false;
         }
-    }
-
-    @Override
-    public final void clearOptions() {
-        AllOptions.clear();
     }
 
     @Override
@@ -246,35 +172,14 @@ public abstract class UCIEngineBase implements UCIEngine {
         }
 
         if (option != null) {
-            option.visible = editableOption(name);
             AllOptions.addOption(option);
         }
         return option;
     }
 
     @Override
-    public final void setEloStrength(int elo) {
-        String lsName = "UCI_LimitStrength";
-        boolean limit = elo != Integer.MAX_VALUE;
-        UCIOptions.OptionBase o = AllOptions.getOption(lsName);
-        if (o instanceof UCIOptions.CheckOption) {
-            // Don't use setOption() since this value reflects current search parameters,
-            // not user specified strength settings, so should not be saved in .ini file.
-            writeLineToEngine(String.format(Locale.US, "setoption name %s value %s",
-                    lsName, limit ? "true" : "false"));
-        }
-        if (limit)
-            setOption("UCI_Elo", elo);
-    }
-
-    @Override
     public final void setOption(String name, int value) {
         setOption(name, String.format(Locale.US, "%d", value));
-    }
-
-    @Override
-    public final void setOption(String name, boolean value) {
-        setOption(name, value ? "true" : "false");
     }
 
     @Override

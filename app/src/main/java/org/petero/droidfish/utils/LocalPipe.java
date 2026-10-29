@@ -19,7 +19,6 @@
 package org.petero.droidfish.utils;
 
 import java.util.LinkedList;
-import java.util.Locale;
 
 /**
  * Implements line-based text communication between threads.
@@ -27,22 +26,6 @@ import java.util.Locale;
 public class LocalPipe {
     private LinkedList<String> lines = new LinkedList<>();
     private boolean closed = false;
-
-    /**
-     * Write a line to the pipe.
-     */
-    public final synchronized void printLine(String format) {
-        String s = String.format(Locale.US, format, new Object[]{});
-        addLine(s);
-    }
-
-    /**
-     * Write a line to the pipe.
-     */
-    public final synchronized void printLine(String format, Object... args) {
-        String s = String.format(Locale.US, format, args);
-        addLine(s);
-    }
 
     public final synchronized void addLine(String line) {
         while (lines.size() > 10000) {
@@ -53,13 +36,6 @@ public class LocalPipe {
         }
         lines.add(line);
         notify();
-    }
-
-    /**
-     * Read a line from the pipe. Returns null on failure.
-     */
-    public final synchronized String readLine() {
-        return readLine(-1);
     }
 
     /**

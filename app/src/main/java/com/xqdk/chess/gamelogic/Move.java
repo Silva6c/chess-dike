@@ -15,20 +15,6 @@ public class Move implements Serializable {
     public Position toPosition;
     public int piece;
 
-    public String getComment() {
-        return comment;
-    }
-
-    public void setComment(String comment) {
-        if(comment != null) {
-            comment = comment.strip();
-            comment = comment.replace("&nbsp;", " ");
-        }
-        this.comment = comment;
-    }
-
-    public String comment;
-
     // create hashmap to convert Arabic numerals to Chinese numerals
     public static final HashMap<Integer, String> arabicToChineseMap = new HashMap<>();
     static {
@@ -57,11 +43,6 @@ public class Move implements Serializable {
 
     public Move(Board board) {
         this.board = new Board(board);
-    }
-
-    public void setBoard(Board board) {
-        this.board = new Board(board);
-        updatePieceInfo();
     }
 
     private void updatePieceInfo(){
@@ -267,7 +248,6 @@ public class Move implements Serializable {
                  fromPosition +
                 " => " + toPosition +
                 ", piece=" + piece +
-                ", comment='" + comment + '\'' +
                 '}';
     }
 }
