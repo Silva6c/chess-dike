@@ -189,6 +189,9 @@ class OverlayChessView @JvmOverloads constructor(
 
     private fun drawPieces(canvas: Canvas) {
         val arr = pieces ?: return
+        // 长度防御：生产端契约 9×10=90，异常长度直接跳过而非 AIOOBE 崩面板
+        //（体检 P2：越界读发生在取值处、原防御判断之前）
+        if (arr.size != 90) return
         val size = pieceSize * scale
         for (y in 0..9) for (x in 0..8) {
             val p = arr[y * 9 + x]

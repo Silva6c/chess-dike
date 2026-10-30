@@ -1,0 +1,13 @@
+# 依赖与 action 的自动升级通告（2026-10-31 安全体检加固）：
+# actions 升级 PR 配合 workflow 里的 commit-SHA pin 使用——Dependabot 会把 SHA pin
+# 更新到新版本的 SHA，保持"版本跟进 + 完整性锚定"两全。
+version: 2
+updates:
+  - package-ecosystem: gradle
+    directory: "/"
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly

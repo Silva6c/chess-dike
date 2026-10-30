@@ -3,6 +3,7 @@ package com.xqdk.chess.assist.ui
 import android.content.Context
 import android.graphics.drawable.GradientDrawable
 import android.text.SpannableStringBuilder
+import android.text.TextUtils
 import android.text.style.ForegroundColorSpan
 import android.util.AttributeSet
 import android.view.LayoutInflater
@@ -14,6 +15,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import com.xqdk.chess.R
 import kotlin.math.abs
+import kotlin.math.max
 
 /** 状态语义档（颜色由当前主题调色板解析，见 QiPalette）：
  *  运行=玉 / 等待=琥珀 / 停止=灰 / 异常=警示红 / 手动=琥珀 */
@@ -280,22 +282,38 @@ class OverlayPanelView @JvmOverloads constructor(
 
         // 候选/预案行（点阵折进尾部：当前候选=琥珀实点，其余=次级点——
         // 弱化色在最坏背景下会隐形，2026-10 对比度审计后并入次级灰）
-        // 缓存比对：文本/色调/点阵参数均未变则跳过 Spannable 重建（稳态零分配）
+        // 缓存比对：文本/色调/点阵参数/可用宽度均未变则跳过 Spannable 重建
         val cand = model.candidateText
         if (cand.isNullOrEmpty()) {
             candidate.visibility = View.GONE
         } else {
             candidate.visibility = View.VISIBLE
-            val candKey = "$cand|${model.candidateTone}|${model.candidateIndex}|${model.candidateCount}"
+            // key 带宽度：首帧 width=0 时不截断，layout 完成后按真实可用宽重截一次
+            val candKey = "$cand|${model.candidateTone}|${model.candidateIndex}|" +
+                "${model.candidateCount}|${candidate.width}"
             if (lastCandidateKey != candKey) {
                 lastCandidateKey = candKey
-                val sb = SpannableStringBuilder(cand)
+                // ⚠ 候选行 maxLines=1 + ellipsize=end（392×197dp 高度契约）：系统
+                // 省略号作用在整行文本尾部，会把拼在后面的点阵连同"✓"一起截掉
+                // （体检 P1：多候选指示常态失效）。文本先按"留出点阵宽度"自行
+                // ellipsize，点阵恒可见；width 未就绪（首帧）先不截，下次渲染修正
+                val dotsText = if (model.candidateCount in 2..9)
+                    "  " + (1..model.candidateCount).joinToString(" ") { "●" } else ""
+                val sb = SpannableStringBuilder()
+                val avail = (candidate.width - candidate.paddingLeft - candidate.paddingRight).toFloat()
+                val textPart: CharSequence = if (dotsText.isNotEmpty() && avail > 0f) {
+                    val dotsW = candidate.paint.measureText(dotsText)
+                    TextUtils.ellipsize(
+                        cand, candidate.paint, (avail - dotsW).coerceAtLeast(0f),
+                        TextUtils.TruncateAt.END,
+                    )
+                } else cand
+                sb.append(textPart)
                 sb.setSpan(
                     ForegroundColorSpan(toneColor(model.candidateTone, palette.fg)),
-                    0, sb.length, 0,
+                    0, textPart.length, 0,
                 )
                 if (model.candidateCount in 2..9) {
-                    sb.append("  ")
                     for (i in 1..model.candidateCount) {
                         val start = sb.length
                         sb.append("●")
@@ -311,11 +329,14 @@ class OverlayPanelView @JvmOverloads constructor(
         }
 
         // 值芯片：标签灰 + 值琥珀（等宽由 tnum 保证）；setText 前比对防频跳（根因 4）。
-        // 深度/时间芯片按思考制式互斥显示（连线页切换，depthText/timeText 至多一个非 null）
-        btnStrength.visibility = if (model.depthText != null) View.VISIBLE else View.GONE
-        btnTime.visibility = if (model.timeText != null) View.VISIBLE else View.GONE
-        setChipText(btnStrength, "深度", model.depthText)
-        setChipText(btnTime, "时间", model.timeText)
+        // 深度/时间芯片按思考制式互斥显示（连线页切换，depthText/timeText 至多一个
+        // 非 null）——渲染侧 depth 优先兜底，互斥不依赖服务端自觉（体检 P2）
+        val depthText = model.depthText
+        val timeText = if (depthText != null) null else model.timeText
+        btnStrength.visibility = if (depthText != null) View.VISIBLE else View.GONE
+        btnTime.visibility = if (timeText != null) View.VISIBLE else View.GONE
+        setChipText(btnStrength, "深度", depthText)
+        setChipText(btnTime, "时间", timeText)
         setChipText(btnHash, "哈希", model.hashText)
         setChipText(btnEngine, "引擎", model.engineText)
         val pauseText = if (model.paused) "继续" else "停止"
@@ -458,6 +479,14 @@ class OverlayPanelView @JvmOverloads constructor(
             if (dragging && p != null) {
                 p.x = startX + (ev.rawX - downX).toInt()
                 p.y = startY + (ev.rawY - downY).toInt()
+                // 屏内钳制：FLAG_LAYOUT_NO_LIMITS 允许任意坐标，拖出屏后本会话无法
+                // 找回（体检 P2）——与 ensureOverlay 建窗钳制同口径，全面板留屏内
+                if (width > 0 && height > 0) {
+                    val availW = resources.displayMetrics.widthPixels
+                    val availH = resources.displayMetrics.heightPixels
+                    p.x = p.x.coerceIn(0, max(0, availW - width))
+                    p.y = p.y.coerceIn(0, max(0, availH - height))
+                }
                 wm?.updateViewLayout(this, p)
                 return true
             }

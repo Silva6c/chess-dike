@@ -129,7 +129,7 @@
                 android:layout_height="28dp"
                 android:layout_marginStart="2dp"
                 android:layout_weight="1"
-                android:text="3变" />
+                android:text="1变" />
         </LinearLayout>
 
         <LinearLayout

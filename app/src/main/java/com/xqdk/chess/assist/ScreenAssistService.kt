@@ -140,9 +140,13 @@ class ScreenAssistService : Service() {
      */
     private val config by lazy { AssistConfig(this) }
 
-    private var mediaProjection: MediaProjection? = null
-    private var virtualDisplay: VirtualDisplay? = null
-    private var imageReader: ImageReader? = null
+    // 跨线程三字段 @Volatile 补标（体检 P2）：写侧跨主线程（startCapture/stopGuidance/
+    // onDestroy）与 worker 线程（projectionCallback.onStop），读侧两侧都有——文件头
+    // 线程模型不变量"跨线程字段全部 @Volatile"的对齐；引用读写原子 + releaseCapture
+    // 幂等，双路径并发释放最坏多做一次空安全释放
+    @Volatile private var mediaProjection: MediaProjection? = null
+    @Volatile private var virtualDisplay: VirtualDisplay? = null
+    @Volatile private var imageReader: ImageReader? = null
     private val projectionManager by lazy {
         getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
     }
@@ -234,8 +238,9 @@ class ScreenAssistService : Service() {
      * 封口，loader 线程注入识别器，识别线程写行——DiagLogWriter 内部 synchronized。
      */
     @Volatile private var diagLog: DiagLogWriter? = null
-    /** 连续产出结构非法局面的帧数（走子动画过渡帧常客）：连续 3 帧强制角点重定位 */
-    private var invalidStreak = 0
+    /** 连续产出结构非法局面的帧数（走子动画过渡帧常客）：连续 3 帧强制角点重定位。
+     *  跨线程（startCapture 主线程重置 vs worker 帧循环读写）故 @Volatile（体检 P2） */
+    @Volatile private var invalidStreak = 0
 
     // ==================== 识别节拍器（Cabinet RecognizePacer 同款，见类 KDoc）====================
     // 两次识别最短间隔 = max(下限, 上次实际成本×2) × 失败退避(≤8s)，burst 期收紧 cost×1.1。
@@ -379,6 +384,8 @@ class ScreenAssistService : Service() {
         val type = if (Build.VERSION.SDK_INT >= 29)
             android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION else 0
         ServiceCompat.startForeground(this, NOTIF_ID, notification, type)
+        // 前台门闩置位：此后 notifyStatusChanged 才允许 notify（见字段注释）
+        foregroundActive = true
     }
 
     private fun createChannel() {
@@ -422,15 +429,29 @@ class ScreenAssistService : Service() {
         // 新会话识别立即放行：清退避/burst/成本历史（旧会话的失败退避不带入）
         onnxPacer.reset()
         yoloPacer.reset()
+        // 通知去重状态重置：旧会话最后通知文本残留会吞掉新会话的首条状态通知
+        //（通知栏停在上一会话文案，体检 P2）
+        lastNotifiedText = null
         val metrics = screenMetrics()
         val w = metrics.widthPixels
         val h = metrics.heightPixels
         val dpi = metrics.densityDpi
 
-        mediaProjection = projectionManager.getMediaProjection(resultCode, data).also { mp ->
+        // 授权结果被系统判失效（部分 ROM 对授权一次性/时效的私有限制、授权到取用
+        // 之间被回收）会抛 SecurityException/IllegalStateException——此时前台通知已
+        // 挂出，不接住即进程崩溃（体检 P1）：降级为状态提示 + 停服，用户重新授权即可
+        val mp = try {
+            projectionManager.getMediaProjection(resultCode, data)
+        } catch (t: Throwable) {
+            Log.w(TAG, "getMediaProjection failed", t)
+            setStatus("录屏授权已失效\n请回连线页重新点击开始")
+            stopSelf()
+            return
+        }
+        mediaProjection = mp.also {
             // 录屏被系统侧停止（投屏开关/授权对话框"停止"）时服务无从知晓，识别永不自愈
             // 也无释放——注册回调，onStop 后释放采集并提示（回调任务在 worker 队列串行）
-            mp.registerCallback(projectionCallback, workerHandler)
+            it.registerCallback(projectionCallback, workerHandler)
         }
         diagLog?.appendEvent("录屏启动", "${w}×$h @${dpi}dpi")
         // 记录帧尺寸：悬浮窗遮挡判断把归一化棋盘框换算回像素时需要
@@ -692,34 +713,6 @@ class ScreenAssistService : Service() {
         return diff.toFloat() / (cols * rows).coerceAtLeast(1)
     }
 
-    /**
-     * 调试开关：当 /sdcard/assist_debug_save 存在时，把服务实际收到的帧原始字节存到
-     * /sdcard/assist_frame.raw（magic=ASFR, 大端 int w/h, 之后 RGB 三字节每像素）。
-     */
-    private fun debugSaveFrameIfRequested(frame: Frame) {
-        if (!com.xqdk.chess.BuildConfig.DEBUG) return
-        val trigger = java.io.File("/sdcard/assist_debug_save")
-        if (!trigger.exists()) return
-        trigger.delete()
-        try {
-            val dir = getExternalFilesDir(null) ?: filesDir
-            val outPath = java.io.File(dir, "assist_frame.raw").absolutePath
-            java.io.DataOutputStream(java.io.FileOutputStream(outPath)).use { out ->
-                out.writeInt(0x41534652) // 'ASFR'
-                out.writeInt(frame.width)
-                out.writeInt(frame.height)
-                for (p in frame.argb) {
-                    out.writeByte((p shr 16) and 0xFF)
-                    out.writeByte((p shr 8) and 0xFF)
-                    out.writeByte(p and 0xFF)
-                }
-            }
-            Log.i(TAG, "debug frame saved $outPath")
-        } catch (e: Exception) {
-            Log.w(TAG, "debug frame save failed", e)
-        }
-    }
-
     // ==================== 识别与分析 ====================
 
     /**
@@ -768,7 +761,6 @@ class ScreenAssistService : Service() {
         // 保存最近一帧引用（Frame 像素独立分配，保存引用安全）：
         // 画面静止回调停摆时由 frameTick 重放它推进多帧确认
         lastFrame = frame
-        debugSaveFrameIfRequested(frame)
         if (engineName == ENGINE_ONNX) {
             handleFrameOnnx(frame)
             return
@@ -1008,8 +1000,10 @@ class ScreenAssistService : Service() {
         if (name != ENGINE_ONNX) return
         // 加载代际：ONNX→YOLO→ONNX 快速切换时两个 loader 都可能通过 engineName 校验，
         // 旧 loader 会覆盖新 loader 的会话（旧者永不 release 泄漏 native 内存）；
-        // 以代际标识让过期 loader 自行释放
-        val gen = ++engineGen
+        // 以代际标识让过期 loader 自行释放。自增持锁：与 onDestroy 的代际失效
+        // （engineGen++，体检 P0）并发时不丢增——丢增会让两个 loader 同代际、
+        // 旧者覆盖新者且永不 release
+        val gen = synchronized(onnxEngineLock) { ++engineGen }
         Thread {
             // profiling 由 AssistConfig.benchProfiling 控制（诊断开关，连线页"性能
             // 诊断"按钮切换，切换经 setBenchProfiling 重建引擎后生效）；诊断识别行
@@ -1071,7 +1065,7 @@ class ScreenAssistService : Service() {
         resetSuggestionState()
         history.addLast(HistoryEntry(confirmed, tracker.redGo, currentFen))
         if (history.size > 60) history.removeFirst()
-        Log.i(TAG, "board confirmed: $currentFen")
+        // 对局局面不进 logcat（旁路泄露面；诊断日志开启时已有同等信息落盘）
         diagLog?.appendEvent("棋盘确认", currentFen)
         postRender()
         scheduleAnalysis()
@@ -1220,6 +1214,16 @@ class ScreenAssistService : Service() {
 
     private fun ensureOverlay(): OverlayPanelView? {
         if (overlayPanel != null) return overlayPanel
+        // ⚠⚠ 雷区（用户实测两轮的顽固 bug 根因，勿删此守卫）：面板只允许在录屏会话
+        // 内"新建"。本服务是 bind-only 也会被创建（连线页 bindService，未授权录屏），
+        // 此时 overlayClosed=false（字段初值）、悬浮窗权限已授予（首次使用后），任何
+        // postRender——onServiceConnected 的 setSearchMode、引擎加载失败的 setStatus——
+        // 都会走到这里把悬浮窗建出来：用户重开 App，悬浮窗"自动跳出"，而非点击
+        // "开始屏幕识别"后出现。不变量：面板生命周期 ⊆ 录屏会话生命周期
+        // （startCapture 拿到 mediaProjection 后第一帧建窗；stopGuidance/releaseCapture
+        // 收会话）。已存在面板的"更新"不受此守卫影响（录屏被系统停止后面板仍显示
+        // 收场提示，点关闭或退出才移除）。
+        if (mediaProjection == null) return null
         if (!android.provider.Settings.canDrawOverlays(this)) return null
         val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         val panel = OverlayPanelView(this)
@@ -1570,6 +1574,9 @@ class ScreenAssistService : Service() {
             if (isTime) AnalysisEngine.SearchMode.TIME else AnalysisEngine.SearchMode.DEPTH,
             config.searchTimeMs)
         diagLog?.appendEvent("档位", "搜索制式→${if (isTime) "时间制" else "深度制"}")
+        // ⚠ 本函数是连线页 onServiceConnected 的无条件回调（冷启动必经），这里的
+        // postRender 曾是"重开 App 悬浮窗自动跳出"的直接触发链——现由 ensureOverlay
+        // 的录屏会话守卫拦截（无会话时 renderOverlay 为 no-op），勿回退该守卫
         postRender()
     }
 
@@ -1601,6 +1608,12 @@ class ScreenAssistService : Service() {
     /** 最近一次已推送到通知栏的状态文本（通知去重：内容不变不 notify，根因 10） */
     @Volatile private var lastNotifiedText: String? = null
 
+    /** 服务是否处于前台（startForegroundInternal 置位 / releaseCapture 复位）：
+     *  notifyStatusChanged 的门闩——非前台一律不 notify。stopForeground 不会取消
+     *  非前台服务自行 notify 的同 ID ongoing 通知，无门闩则 bind-only 服务的
+     *  setStatus（如引擎加载失败）会挂出滑不掉的"运行中"僵尸通知（体检 P1） */
+    @Volatile private var foregroundActive = false
+
     /**
      * 状态更新（统一渲染入口，根因 4）：只更新文本 + 走 postRender 管线，不再自己
      * 直接 renderOverlay——与 onSearchDone 等处的 postRender 合并，消灭双渲染。
@@ -1621,6 +1634,10 @@ class ScreenAssistService : Service() {
         // 清空），worker 在途回调仍可能 setStatus 重新 notify——挂出服务已死却不可
         // 滑动清除的 ongoing 通知。与 renderOverlay/onEngineError 的守卫同口径。
         if (overlayClosed) return
+        // 非前台门闩（体检 P1）：bind-only 服务从未 startForeground，其 setStatus
+        //（引擎加载失败等）不得挂通知；stopForeground 不会取消非前台服务的自行
+        // notify，漏出即滑不掉的僵尸 ongoing 通知
+        if (!foregroundActive) return
         if (text == lastNotifiedText) return
         lastNotifiedText = text
         runCatching {
@@ -1665,6 +1682,9 @@ class ScreenAssistService : Service() {
     private fun renderOverlay(statusOverride: String? = null) {
         // 用户点“关闭”后不重建（直到重新启动服务）
         if (overlayClosed) return
+        // 无录屏会话时 ensureOverlay 拒绝"新建"（雷区注释见其函数头）：bind-only
+        // 服务的全部 postRender 在此安全变 no-op，悬浮窗只在点击"开始屏幕识别"
+        // （ACTION_START 拿到录屏授权）之后出现
         val panel = ensureOverlay() ?: return
         val fen = currentFen
         val myRed = mySideIsRed()
@@ -1859,8 +1879,13 @@ class ScreenAssistService : Service() {
         yoloDetector?.close()
         yoloDetector = null
         // 与 loader 线程同锁：loader 在 synchronized(onnxEngineLock) 内赋值 onnxEngine，
-        // 裸读裸释放会漏掉"release 之后 loader 才完成赋值"的时序 → 21.5MB native 会话泄漏
+        // 裸读裸释放会漏掉"release 之后 loader 才完成赋值"的时序 → 21.5MB native 会话泄漏。
+        // ⚠ engineGen++（代际失效）是体检 P0 配套：本块只处理"已赋值"的会话；在途
+        // loader 随后到达赋值点时 gen != engineGen 必然成立 → 自行 release。缺此行时
+        // "onCreate 起加载、加载窗口内销毁服务"（点开 App 立即退出，高频操作）的窗口里
+        // OrtSession 照常赋值，泄漏至进程死且 bind-only 场景下反复开关逐次累计
         synchronized(onnxEngineLock) {
+            engineGen++
             onnxEngine?.release()
             onnxEngine = null
         }
@@ -1875,6 +1900,9 @@ class ScreenAssistService : Service() {
             runCatching { windowManager?.removeView(p) }
         }
         overlayPanel = null
+        // 通知兜底撤除（幂等）：前台路径 stopForeground 已撤；其余一切路径（含
+        // 门闩生效前的历史遗漏）在此封死（体检 P1）
+        runCatching { getSystemService(NotificationManager::class.java).cancel(NOTIF_ID) }
         super.onDestroy()
     }
 
@@ -1888,6 +1916,8 @@ class ScreenAssistService : Service() {
         try { mediaProjection?.stop() } catch (e: Exception) { }
         mediaProjection = null
         stopForeground(STOP_FOREGROUND_REMOVE)
+        // 前台门闩复位：此后 setStatus 不再 notify（非前台 notify 是僵尸通知来源）
+        foregroundActive = false
     }
 
     /** 录屏系统侧停止回调（startCapture 注册、releaseCapture 注销）：

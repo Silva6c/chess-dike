@@ -28,6 +28,7 @@
 | sqliteassethelper | 2.0.1 | Apache-2.0 |
 | androidx / material / kotlin stdlib 等 | 见 libs.versions.toml | Apache-2.0 |
 | Robolectric（仅测试） | 4.14.1 | MIT |
+| JUnit 4（仅测试） | 4.13.2 | EPL-1.0 |
 
 ## 4. 内嵌源码模块
 
@@ -46,3 +47,14 @@
 - 本仓库衍生自 GPL-3.0 项目（DroidFish）且直接包含其衍生代码，故**整体以 GPL-3.0
   发布**；对外分发 APK（含修改版）时须提供完整对应源码并保留版权声明。
 - 自行编译自用不触发对外分发义务。
+
+## 7. 预编译二进制完整性基线
+
+pikafish 引擎二进制（§1）随仓库分发但无上游版本标注；下表 sha256 为 2026-10-31
+入库快照，作为完整性基线——升级引擎/权重时重新计算并同步更新本表。
+
+| 文件 | SHA-256 |
+|---|---|
+| `app/src/main/pikafish/arm64-v8a/libpikafish-armv8.so` | `0edbca87d0d06b5126082a37703fd369e8d3177b24b96445e9e9702f8023b971` |
+| `app/src/main/pikafish/arm64-v8a/libpikafish-armv8-dotprod.so` | `10ee4060e9fbc627acfd9f470d66c4e7055ce8705270606dea4c23275fa382f2` |
+| `app/src/main/pikafish/arm64-v8a/libpikafish.nnue.so` | `53f62e990716187e59510898749cf59bcb680c4da0b80c23005cec3eda321cc6` |

@@ -7,6 +7,8 @@ import android.graphics.Paint
 import android.util.AttributeSet
 import android.view.View
 import android.view.animation.LinearInterpolator
+import androidx.core.content.ContextCompat
+import com.xqdk.chess.R
 import kotlin.math.cos
 
 /**
@@ -67,6 +69,16 @@ class AssistDotGridView @JvmOverloads constructor(
 
     private var state = AssistState.IDLE
 
+    // 四态点色基色：自 colors.xml token 派生（alpha 组合），token 改值不漂移（体检 P2：
+    // 原 0xE62E7D32 等字面量与 token 数值重复定义，改 token 时会静默失配）
+    private val idleDot = alphaToken(0x1A, R.color.xq_ink_text) // 待机墨 10%
+    private val stillDot = alphaToken(0xE6, R.color.xq_jade)    // 等待/思考/手动：玉绿
+    private val errorDot = alphaToken(0xE6, R.color.xq_warn)    // 引擎异常：警示红
+    private val amberBase = ContextCompat.getColor(context, R.color.xq_amber) and 0xFFFFFF
+
+    private fun alphaToken(alpha: Int, res: Int): Int =
+        (alpha shl 24) or (ContextCompat.getColor(context, res) and 0xFFFFFF)
+
     private val animator = ValueAnimator.ofFloat(0f, 2f * Math.PI.toFloat()).apply {
         duration = WAVE_PERIOD_MS.toLong()
         interpolator = LinearInterpolator()
@@ -106,17 +118,24 @@ class AssistDotGridView @JvmOverloads constructor(
         }
     }
 
-    /** 各语义态的点色（纸档 token，四态四色：墨/琥珀行波/玉绿/警示红） */
+    /** 各语义态的点色（纸档 token 派生，四态四色：墨/琥珀行波/玉绿/警示红） */
     private fun dotColor(index: Int): Int = when (state) {
-        AssistState.IDLE -> 0x1A292D2A // 待机墨 10% 恒静
-        AssistState.RUNNING_STILL -> 0xE62E7D32.toInt() // 等待/思考/手动：玉绿恒亮
-        AssistState.ERROR -> 0xE6C62828.toInt() // 引擎异常：警示红
+        AssistState.IDLE -> idleDot
+        AssistState.RUNNING_STILL -> stillDot
+        AssistState.ERROR -> errorDot
         AssistState.RUNNING_WAVE -> {
             // 识别中：琥珀逐点亮——0.35 基亮 + 行波峰 0.85（80ms/点错峰）
             val wave = 0.5f + 0.5f * cos(phase - phaseOffsets[index])
             val alpha = (0.35f + 0.5f * wave).coerceIn(0f, 1f)
-            ((alpha * 255).toInt() shl 24) or 0x9A5B00
+            ((alpha * 255).toInt() shl 24) or amberBase
         }
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        // detach→attach 循环后按当前态恢复行波：onDetachedFromWindow 已 cancel，
+        // 而 setAssistState 同态 no-op 不会重启，须在此补启（体检 P2）
+        if (state == AssistState.RUNNING_WAVE && !animator.isRunning) animator.start()
     }
 
     override fun onDetachedFromWindow() {

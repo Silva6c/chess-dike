@@ -5,20 +5,41 @@ import org.json.JSONArray
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
+import java.time.OffsetDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-/** stable tag 名约束（8 位日期；字典序 = 时间序） */
+/**
+ * 正式发布的 tag 双制式（2026-10-31 用户拍板切换）：
+ * - 新制 `vX.Y` / `vX.Y.Z`（语义化版本，此后正式版只发这个）——tag 名里没有日期，
+ *   日期取 Release 的发布时间（published_at，缺失回退 created_at）换算北京时间；
+ * - 旧制 `stable-YYYYMMDD`（8 位日期，字典序 = 时间序）——已废弃停发，但历史
+ *   stable Release 永久挂在仓库上，老用户的检查更新必须能继续看到它们。
+ * 两制式的比较口径统一为 8 位北京时间日期（见 [ReleaseInfo]）。
+ */
+private val SEMVER_TAG_RE = Regex("^v\\d+(\\.\\d+){1,2}$")
 private val STABLE_TAG_RE = Regex("^stable-(\\d{8})$")
 
-/** 单条 stable 发布（解析产物） */
-data class StableRelease(val tag: String, val date: String)
+/** 北京时区（Release 发布时间换算目标；CI 产物 BUILD_DATE 同为北京时间口径） */
+private val ZONE_BEIJING: ZoneId = ZoneId.of("Asia/Shanghai")
+
+/** 单条正式发布（解析产物）。date 统一为 8 位北京时间日期，两制式同口径比较 */
+data class ReleaseInfo(val tag: String, val date: String)
+
+/** GitHub Release 的 ISO8601 时间（如 2026-10-31T14:22:33Z）→ 北京时间 8 位日期；
+ *  解析失败返回 null（调用方剔除该条——定不了日期的发布不能参与"最新"比较） */
+internal fun isoToBeijingDate(iso: String): String? = runCatching {
+    OffsetDateTime.parse(iso).atZoneSameInstant(ZONE_BEIJING)
+        .toLocalDate().format(DateTimeFormatter.BASIC_ISO_DATE)
+}.getOrNull()
 
 /** 检查结果（sealed 便于 UI 侧穷尽处理） */
 sealed class UpdateResult {
     /** 已是最新（或列表里没有比构建日期更新的正式版） */
     object UpToDate : UpdateResult()
 
-    /** 发现新版本：tag = stable-YYYYMMDD，date = 8 位日期 */
+    /** 发现新版本：tag = v3.2（新制）/ stable-20261030（旧制历史），date = 8 位日期 */
     data class Newer(val tag: String, val date: String) : UpdateResult()
 
     /** 查询失败：短文案已归类，直接可上屏 */
@@ -26,39 +47,47 @@ sealed class UpdateResult {
 }
 
 /**
- * 从 releases 列表 JSON 过滤出正式 stable-* 发布：排除 draft 与 prerelease
- * （assets 版权物 Release 应标 prerelease，此过滤是第二道保险），tag 名精确匹配
- * stable-YYYYMMDD。org.json 解析（Android 内置，JVM 单测走 Robolectric）。
+ * 从 releases 列表 JSON 过滤出正式发布：排除 draft 与 prerelease（assets 版权物
+ * Release 应标 prerelease，此过滤是第二道保险），tag 双制式识别（见文件头）后
+ * 统一换算 8 位日期。org.json 解析（Android 内置，JVM 单测走 Robolectric）。
  * 解析失败抛 org.json 异常，由调用方归类。
  */
-fun parseReleases(json: String): List<StableRelease> {
+fun parseReleases(json: String): List<ReleaseInfo> {
     val arr = JSONArray(json)
-    val out = ArrayList<StableRelease>()
+    val out = ArrayList<ReleaseInfo>()
     for (i in 0 until arr.length()) {
         val o = arr.getJSONObject(i)
         if (o.optBoolean("draft") || o.optBoolean("prerelease")) continue
         val tag = o.optString("tag_name")
-        val m = STABLE_TAG_RE.find(tag) ?: continue
-        out.add(StableRelease(tag, m.groupValues[1]))
+        // 日期三源：旧制 tag 名自带 → 新制发布时间 → 缺失回退创建时间；全部不可得
+        // （外来的杂 tag / 时间字段损坏）则剔除，绝不参与"最新"比较
+        val date = STABLE_TAG_RE.find(tag)?.groupValues?.get(1)
+            ?: (if (SEMVER_TAG_RE.matches(tag)) {
+                isoToBeijingDate(o.optString("published_at"))
+                    ?: isoToBeijingDate(o.optString("created_at"))
+            } else null)
+            ?: continue
+        out.add(ReleaseInfo(tag, date))
     }
     return out
 }
 
-/** 构建日期早于最新 tag 日期即有新版（8 位日期字符串字典序比较）；同日=已最新 */
+/** 构建日期早于最新发布日期即有新版（8 位日期字符串字典序比较）；同日=已最新 */
 fun isNewer(latestDate: String, buildDate: String): Boolean = latestDate > buildDate
 
 /**
  * 检查更新（连线页手动按钮，设计移植自 Cabinet internal/update）：
  * **不主动检查**——无启动自检、无后台轮询，用户点"检查更新"才发一次查询；
- * 查 GitHub releases 列表选最新正式 stable-*，与构建日期比较后提示，**不内置
- * 下载安装**（提示后跳 Release 页由用户手动下载——不申请 REQUEST_INSTALL_PACKAGES
- * 敏感权限，维持"最小权限集"的合规形象）。
+ * 查 GitHub releases 列表选最新正式发布（新制 vX.Y.Z + 旧制 stable-* 双制式并存），
+ * 与构建日期比较后提示，**不内置下载安装**（提示后跳 Release 页由用户手动下载
+ * ——不申请 REQUEST_INSTALL_PACKAGES 敏感权限，维持"最小权限集"的合规形象）。
  *
  * 设计要点（Cabinet 同款血泪经验）：
  * - **不用 releases/latest 端点**：assets 版权物 Release 也挂在仓库上，列表过滤
- *   + tag 日期取最大双保险（assets Release 应标 prerelease，过滤是第二道保险）；
- * - **版本比较用 tag 日期而非 versionCode**：公开仓"稳定版=一笔提交"会强推压平，
- *   提交数（versionCode）随压平回落，前后不可比；构建日期 vs tag 日期恒单调；
+ *   + 发布日期取最大双保险（assets Release 应标 prerelease，过滤是第二道保险）；
+ * - **版本比较用发布日期而非 versionCode**：公开仓"稳定版=一笔提交"会强推压平，
+ *   提交数（versionCode）随压平回落、前后不可比；构建日期 vs 发布日期恒单调
+ *   （新制日期取 Release 发布时间换算北京时间，旧制取 tag 名内嵌日期）；
  * - **API 查询 3 秒超时**；失败归因为简短中文文案（中国大陆直连 api.github.com
  *   通常不可达，文案如实提示"需可访问 GitHub 的网络环境"），不猜代理不重试。
  *
@@ -120,7 +149,7 @@ class AppUpdateChecker(private val buildDate: String) {
         }
         val latest = rels.maxByOrNull { it.date }
         return if (latest == null) {
-            // 列表无正式 stable-*：仓库刚建/全部为 prerelease 的边界，如实提示
+            // 列表无正式发布（仓库刚建/全部为 prerelease 的边界），如实提示
             UpdateResult.Failure("暂无正式发布版本")
         } else if (isNewer(latest.date, buildDate)) {
             UpdateResult.Newer(latest.tag, latest.date)

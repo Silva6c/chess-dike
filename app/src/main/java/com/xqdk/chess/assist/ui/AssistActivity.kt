@@ -61,6 +61,9 @@ class AssistActivity : AppCompatActivity() {
             "· ONNX 两步式识别引擎（RTMPose 角点 + Swin 分类）的模型与算法来自 " +
             "Shirakawa-Kotone/chinese-chess-helper 项目；\n" +
             "· 引擎框架基座：Pikafish 团队与 DroidFish（Peter Österlund），GPL-3.0 开源授权。"
+
+        /** 免责同意态的 savedInstanceState 键（仅跨配置重建传递，不持久化——冷启动必重弹） */
+        private const val KEY_DISCLAIMER_AGREED = "disclaimer_agreed"
     }
 
     /** 步骤行状态（几何序号语义：完成玉✓实心 / 待办朱砂描边 / 未开始灰空心） */
@@ -71,6 +74,11 @@ class AssistActivity : AppCompatActivity() {
 
     private var captureIntentCode = -1
     private var captureIntentData: Intent? = null
+
+    /** 免责同意态（仅本实例内存，经 savedInstanceState 跨配置重建）：普通 AlertDialog
+     *  不随配置重建恢复——弹窗在屏时旋转会被系统强制关闭，冷启动条件又不再成立，
+     *  不补弹即静默旁路合规门槛（体检 P1）。未同意 ⇒ 重建后 onResume 补弹。 */
+    private var disclaimerAgreed = false
 
     // 步骤行（①②整行可点，③静态说明行）
     private lateinit var btnOverlay: View
@@ -116,19 +124,12 @@ class AssistActivity : AppCompatActivity() {
             val cb = binder as? ScreenAssistService.CastBinder
             service = cb?.service()
             bound = true
-            // 按持久化配置补应用主题/识别引擎：绑定前在设置页切换时 service 为 null
-            // 被静默丢弃，运行中服务与页面显示会不一致
-            service?.applyOverlayTheme(
-                OverlayTheme.fromKey(com.xqdk.chess.assist.AssistConfig(this@AssistActivity).overlayTheme)
-            )
-            service?.setRecognizerEngine(
-                com.xqdk.chess.assist.AssistConfig(this@AssistActivity).recognizerEngine
-            )
-            // 思考制式同口径补应用：悬浮窗芯片按制式二选一显示，绑定前切换被静默
-            // 丢弃会导致服务制式与页面选中态不一致
-            service?.setSearchMode(
-                com.xqdk.chess.assist.AssistConfig(this@AssistActivity).searchMode == "time"
-            )
+            // 按持久化配置补应用主题/识别引擎/思考制式：绑定前在设置页切换时 service
+            // 为 null 会被静默丢弃，运行中服务与页面显示会不一致（一次取配置三处复用）
+            val cfg = com.xqdk.chess.assist.AssistConfig(this@AssistActivity)
+            service?.applyOverlayTheme(OverlayTheme.fromKey(cfg.overlayTheme))
+            service?.setRecognizerEngine(cfg.recognizerEngine)
+            service?.setSearchMode(cfg.searchMode == "time")
             refreshStatus()
         }
 
@@ -146,8 +147,14 @@ class AssistActivity : AppCompatActivity() {
         if (result.resultCode == Activity.RESULT_OK && result.data != null) {
             captureIntentCode = result.resultCode
             captureIntentData = result.data
-            startCaptureService()
-            Toast.makeText(this, "录屏授权成功，识别服务已启动", Toast.LENGTH_SHORT).show()
+            // Android 12+ 后台启动限制 / 厂商 ROM 收紧下 startForegroundService 可抛
+            // ForegroundServiceStartNotAllowedException，不接住会直接崩（体检 P2）
+            val started = runCatching { startCaptureService() }.isSuccess && captureIntentData != null
+            Toast.makeText(
+                this,
+                if (started) "录屏授权成功，识别服务已启动" else "识别服务启动失败，请回页面重试",
+                Toast.LENGTH_SHORT,
+            ).show()
         } else {
             Toast.makeText(this, "未授予录屏权限，无法识别", Toast.LENGTH_SHORT).show()
         }
@@ -166,6 +173,11 @@ class AssistActivity : AppCompatActivity() {
         // singleTask 复用/外部唤起（通知点入）不新建实例不重弹，只对真冷启动弹
         if (savedInstanceState == null && isTaskRoot()) {
             maybeShowDisclaimer()
+        } else {
+            // 配置重建恢复路径：恢复上一实例的同意态；尚未同意（弹窗在屏时旋转等）
+            // 则补弹——冷启动条件在重建路径永不成立，不补即被静默旁路（体检 P1）
+            disclaimerAgreed = savedInstanceState?.getBoolean(KEY_DISCLAIMER_AGREED, false) ?: false
+            if (!disclaimerAgreed) maybeShowDisclaimer()
         }
 
         // 底部入口：帮助（本地帮助页）/ 关于（本地对话框）——原主页文字入口迁入连线页
@@ -320,8 +332,10 @@ class AssistActivity : AppCompatActivity() {
                                 .setTitle("发现新版本 ${result.tag}")
                                 .setMessage(
                                     "最新稳定版发布于 ${result.date}（当前构建 ${com.xqdk.chess.BuildConfig.BUILD_DATE}）。\n\n" +
-                                    "APK 请从 GitHub Release 页面下载安装（需要可访问 GitHub 的网络环境；" +
-                                    "下载后如与已装包签名不同，需卸载重装）。"
+                                    "APK 请从 GitHub Release 页面下载安装（需要可访问 GitHub 的网络环境）。\n\n" +
+                                    "注意：v3.2 起为官方安全版本线（全新签名证书 + 发布指纹门禁）。\n" +
+                                    "从本版及更早版本升级需先卸载再安装（仅此一次，之后恢复覆盖升级）。" +
+                                    "请只从官方渠道下载，证书指纹可在 README 核验。"
                                 )
                                 .setPositiveButton("打开下载页") { _, _ ->
                                     runCatching {
@@ -393,11 +407,19 @@ class AssistActivity : AppCompatActivity() {
             .setTitle("免责声明")
             .setMessage(DISCLAIMER)
             .setCancelable(false)
-            .setPositiveButton("同意并继续") { d, _ -> d.dismiss() }
+            .setPositiveButton("同意并继续") { d, _ ->
+                disclaimerAgreed = true
+                d.dismiss()
+            }
             .setNegativeButton("不同意并退出") { _, _ ->
                 finishAffinity()
             }
             .show()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putBoolean(KEY_DISCLAIMER_AGREED, disclaimerAgreed)
     }
 
     /** 关于：本地对话框（特色功能 + 免责声明 + 鸣谢），不依赖外部站点 */

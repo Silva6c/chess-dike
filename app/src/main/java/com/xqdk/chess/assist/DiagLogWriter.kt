@@ -143,6 +143,8 @@ class DiagLogWriter(context: Context) {
                     com.xqdk.chess.BuildConfig.VERSION_NAME
                 } catch (_: Throwable) { "?" }
                 w.write("# XQDK 性能诊断\n\n")
+                w.write("> ⚠️ 隐私提示：本文件含完整对局记录（每步局面 FEN）与设备型号/系统版本，" +
+                        "外发（含找开发者排查）前请自行斟酌内容。\n\n")
                 w.write("- 设备：${Build.MANUFACTURER} ${Build.MODEL}（Android ${Build.VERSION.RELEASE}）\n")
                 w.write("- 版本：$ver\n")
                 w.write("- 开始：${CLOCK.format(Date())}\n")

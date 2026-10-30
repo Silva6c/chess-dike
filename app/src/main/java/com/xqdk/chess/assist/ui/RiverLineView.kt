@@ -101,4 +101,15 @@ class RiverLineView @JvmOverloads constructor(
         animator?.cancel()
         super.onDetachedFromWindow()
     }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        // detach→attach 循环后恢复呼吸：setBreathing 同态 no-op 不会重启，须在此
+        // 补启（体检 P2）；shader 依赖宽度，宽度保留则重建，未 layout 由
+        // onSizeChanged 兜底
+        if (breathing) {
+            if (width > 0) paint.shader = buildShader()
+            ensureAnimator().start()
+        }
+    }
 }

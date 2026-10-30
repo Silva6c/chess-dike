@@ -8,7 +8,11 @@ import kotlin.math.abs
  */
 class Frame(val width: Int, val height: Int, val argb: IntArray) {
     init {
-        require(argb.size == width * height) { "frame pixel count mismatch" }
+        // 尺寸>0 防御：0×0 帧会流进 letterbox 产生 NaN 坐标（roundToInt 抛
+        // IllegalArgumentException），在入口处拒绝比在识别深处崩更可诊断（体检 P2）
+        require(width > 0 && height > 0 && argb.size == width * height) {
+            "frame pixel count mismatch"
+        }
     }
 }
 
