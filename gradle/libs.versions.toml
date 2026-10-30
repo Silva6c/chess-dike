@@ -18,7 +18,7 @@ tflite = "2.14.0"
 # 上游 #32298/#23826 未修），Cabinet 已定量分析定论，勿因版本升级重开
 onnxruntime = "1.31.1"
 sqliteAssetHelper = "2.0.1"
-robolectric = "4.14.1"
+robolectric = "4.17"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
