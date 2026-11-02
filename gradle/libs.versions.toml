@@ -12,7 +12,7 @@ junit = "4.13.2"
 appcompat = "1.7.0"
 material = "1.12.0"
 activity = "1.9.3"
-constraintlayout = "2.1.4"
+constraintlayout = "2.2.2"
 # 依赖版本收编：原先散落在 build.gradle.kts 的硬编码统一入 catalog（升级改这里）
 tflite = "2.14.0"
 # 1.31.1（Cabinet 674a6d0 同版）：模型加载 1089→623ms、单帧 99~150ms（模拟器实测、
