@@ -33,12 +33,21 @@ class AssistConfig(context: Context) {
         get() = sp.getInt(KEY_CONFIRM, 3).coerceIn(1, 8)
         set(value) { sp.edit().putInt(KEY_CONFIRM, value.coerceIn(1, 8)).apply() }
 
-    /** 悬浮窗上次位置（左上角，归一化 0..1），未设置则默认 */
+    /**
+     * 悬浮窗上次位置（左上角，归一化 0..1 基准=内容区尺寸）。归一化值**允许为负
+     * 或超 1**——贴边停靠钳制允许面板挂进状态栏/导航栏区域，因此"未保存过"的
+     * 判定不能再用负值哨兵，改由 [hasOverlayPos] 布尔位承担。
+     */
     var overlayPos: Pair<Float, Float>
         get() = sp.getFloat(KEY_OVERLAY_X, -1f) to sp.getFloat(KEY_OVERLAY_Y, -1f)
         set(value) {
             sp.edit().putFloat(KEY_OVERLAY_X, value.first).putFloat(KEY_OVERLAY_Y, value.second).apply()
         }
+
+    /** 是否保存过悬浮窗位置（false = 从未拖动过，落位走默认底部中央） */
+    var hasOverlayPos: Boolean
+        get() = sp.getBoolean(KEY_OVERLAY_POS_SET, false)
+        set(value) { sp.edit().putBoolean(KEY_OVERLAY_POS_SET, value).apply() }
 
     /** 搜索深度（与对弈"固定深度"制式一致，默认 20） */
     var searchDepth: Int
@@ -86,6 +95,15 @@ class AssistConfig(context: Context) {
         get() = sp.getBoolean(KEY_BENCH_PROFILING, false)
         set(value) { sp.edit().putBoolean(KEY_BENCH_PROFILING, value).apply() }
 
+    /**
+     * 空闲预计算（β，默认开）：对方思考期提前以同参搜索当前局面，结果进预判缓存；
+     * 对方落子后若命中预判线，我方建议零等待直接显示且不再发引擎请求。连线页
+     * 设置行热切换（ScreenAssistService.setPrecomputeEnabled）。
+     */
+    var precomputeEnabled: Boolean
+        get() = sp.getBoolean(KEY_PRECOMPUTE_ENABLED, true)
+        set(value) { sp.edit().putBoolean(KEY_PRECOMPUTE_ENABLED, value).apply() }
+
     companion object {
         private const val KEY_RECOGNIZER_ENGINE = "recognizer_engine"
         private const val KEY_FRAME_W = "frame_w"
@@ -93,6 +111,7 @@ class AssistConfig(context: Context) {
         private const val KEY_CONFIRM = "confirm_count"
         private const val KEY_OVERLAY_X = "overlay_x"
         private const val KEY_OVERLAY_Y = "overlay_y"
+        private const val KEY_OVERLAY_POS_SET = "overlay_pos_set"
         private const val KEY_SEARCH_DEPTH = "search_depth"
         private const val KEY_HASH_MB = "hash_mb"
         private const val KEY_MULTI_PV = "multi_pv"
@@ -100,5 +119,6 @@ class AssistConfig(context: Context) {
         private const val KEY_SEARCH_TIME_MS = "search_time_ms"
         private const val KEY_OVERLAY_THEME = "overlay_theme"
         private const val KEY_BENCH_PROFILING = "bench_profiling"
+        private const val KEY_PRECOMPUTE_ENABLED = "precompute_enabled"
     }
 }

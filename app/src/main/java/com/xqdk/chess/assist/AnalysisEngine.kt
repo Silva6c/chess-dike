@@ -285,12 +285,16 @@ class AnalysisEngine(
 
         // 兜底防呆（对弈制式本无超时）：极端情况下 60s 强制收束
         val deadline = System.currentTimeMillis() + 60000
+        // 本次搜索是否被 stop 打断（读循环消费打断标志时置位）：调用方据此区分
+        // "完整搜索结果"与"中断浅结果"（预判缓存只收前者）
+        var stopped = false
         // bestmove 行标志结束；或因新周期 stop 导致 bestmove 立即返回
         while (System.currentTimeMillis() < deadline) {
             // 打断自查：request/flashStop 只置标志，stop 由本（引擎）线程在下发——
             // 必然落在 go 之后，规避跨线程写与"非搜索期 stop 被忽略"两个竞态
             if (stopRequested) {
                 stopRequested = false
+                stopped = true
                 eng.writeLineToEngine("stop")
             }
             // null = 引擎输出流已关闭（进程退出/关停）：置引擎失效走自愈重启，
@@ -315,7 +319,8 @@ class AnalysisEngine(
             } else if (tokens[0] == "bestmove") {
                 val bm = if (tokens.size > 1) tokens[1] else null
                 val res = AnalysisResult(fen, redGo, bm,
-                    lines.values.sortedBy { it.multiPv }.map { it.toAnalysisLine(redGo) })
+                    lines.values.sortedBy { it.multiPv }.map { it.toAnalysisLine(redGo) },
+                    interrupted = stopped)
                 listener.onSearchDone(res)
                 return
             }
@@ -330,7 +335,8 @@ class AnalysisEngine(
             if (tokens[0] == "bestmove") {
                 val bm = if (tokens.size > 1) tokens[1] else null
                 listener.onSearchDone(AnalysisResult(fen, redGo, bm,
-                    lines.values.sortedBy { it.multiPv }.map { it.toAnalysisLine(redGo) }))
+                    lines.values.sortedBy { it.multiPv }.map { it.toAnalysisLine(redGo) },
+                    interrupted = stopped))
                 return
             }
         }
@@ -340,8 +346,10 @@ class AnalysisEngine(
         runCatching { eng.shutDown() }
         engine = null
         ready = false
+        // interrupted=true：这不是完整搜索（管线失步），调用方不得缓存/定着
         listener.onSearchDone(AnalysisResult(fen, redGo, null,
-            lines.values.sortedBy { it.multiPv }.map { it.toAnalysisLine(redGo) }))
+            lines.values.sortedBy { it.multiPv }.map { it.toAnalysisLine(redGo) },
+            interrupted = true))
     }
 
     // parseInfo / MutableAnalysisLine 已抽至 AnalysisModels.kt（纯 JVM，单测

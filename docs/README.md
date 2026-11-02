@@ -5,6 +5,7 @@
 | 文档 | 内容 |
 |---|---|
 | [../README.md](../README.md) | 项目定位、合规声明、从源码构建、大文件与签名说明 |
+| [../DESIGN_BOUNDARIES.md](../DESIGN_BOUNDARIES.md) | 客观能力边界：只读输入、输出形态、权限与网络面、红线清单、自行验证方法 |
 | [技术报告.md](技术报告.md) | 架构定稿：连线识别管线、引擎链路、悬浮窗、测试体系 |
 | [assist-helper.md](assist-helper.md) | 连线功能使用说明与原理 |
 | [../THIRD-PARTY-NOTICES.md](../THIRD-PARTY-NOTICES.md) | 第三方组件与许可义务清单（GPL 合规） |

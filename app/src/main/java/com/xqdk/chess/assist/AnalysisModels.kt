@@ -28,6 +28,9 @@ class AnalysisResult(
     val redGo: Boolean,
     val bestMove: String?,
     val lines: List<AnalysisLine>,
+    /** 本次搜索是否被 stop 打断（未完整跑完）。预判缓存只喂完整搜索——被打断的
+     *  浅结果（对方秒落子/闪电出着打断）深度不足，不值得缓存（2026-11-02 扫描） */
+    val interrupted: Boolean = false,
 ) {
     val bestLine: AnalysisLine? get() = lines.firstOrNull()
 

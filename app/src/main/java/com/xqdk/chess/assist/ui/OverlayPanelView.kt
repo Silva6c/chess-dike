@@ -479,13 +479,18 @@ class OverlayPanelView @JvmOverloads constructor(
             if (dragging && p != null) {
                 p.x = startX + (ev.rawX - downX).toInt()
                 p.y = startY + (ev.rawY - downY).toInt()
-                // 屏内钳制：FLAG_LAYOUT_NO_LIMITS 允许任意坐标，拖出屏后本会话无法
-                // 找回（体检 P2）——与 ensureOverlay 建窗钳制同口径，全面板留屏内
+                // 贴边停靠钳制：FLAG_LAYOUT_NO_LIMITS 允许任意坐标，但面板全拖出屏后
+                // 本会话无法找回（体检 P2）——左右全留屏内；垂直方向允许贴边下探/
+                // 上探，仅保留 PARK_KEEP_DP 在内容区内。早先"全面板留屏内"的口径会
+                // 永远够不到屏幕物理底端：TYPE_APPLICATION_OVERLAY 坐标原点在内容区
+                // 顶（⚠ 见 ensureOverlay 坐标系注释），导航栏区域在其坐标系之外
+                //（2026-11-02 用户实测回归）
                 if (width > 0 && height > 0) {
                     val availW = resources.displayMetrics.widthPixels
                     val availH = resources.displayMetrics.heightPixels
-                    p.x = p.x.coerceIn(0, max(0, availW - width))
-                    p.y = p.y.coerceIn(0, max(0, availH - height))
+                    val keepPx = (PARK_KEEP_DP * resources.displayMetrics.density).toInt()
+                    p.x = clampX(p.x, width, availW)
+                    p.y = clampY(p.y, height, availH, keepPx)
                 }
                 wm?.updateViewLayout(this, p)
                 return true
@@ -499,5 +504,21 @@ class OverlayPanelView @JvmOverloads constructor(
             }
         }
         return super.onTouchEvent(ev)
+    }
+
+    companion object {
+        /** 贴边停靠时保留在内容区内的最小可见高度（dp）：拖动与建窗落位共用口径 */
+        internal const val PARK_KEEP_DP = 48
+
+        /** 左右全留屏内 */
+        internal fun clampX(x: Int, width: Int, availW: Int): Int =
+            x.coerceIn(0, max(0, availW - width))
+
+        /** 垂直允许贴边下探/上探（挂进导航栏/状态栏区域），仅保留 keepPx 可抓取；
+         *  keepPx ≥ height 的退化情况按全留屏内处理（防 coerceIn 区间倒置抛异常） */
+        internal fun clampY(y: Int, height: Int, availH: Int, keepPx: Int): Int {
+            val lo = if (height > keepPx) keepPx - height else 0
+            return y.coerceIn(lo, max(lo, availH - keepPx))
+        }
     }
 }

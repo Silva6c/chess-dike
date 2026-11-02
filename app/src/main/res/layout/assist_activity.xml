@@ -372,6 +372,41 @@
                 tools:ignore="HardcodedText" />
         </LinearLayout>
 
+        <!-- 空闲预计算（β）：对方思考期提前深算当前局面，落子命中预判线时我方建议
+             零等待显示。默认开；发热明显可关闭（关闭后回落常规同参预案搜索） -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="空闲预计算"
+                android:textColor="@color/xq_ink_text"
+                android:textSize="13sp"
+                tools:ignore="HardcodedText" />
+
+            <Button
+                android:id="@+id/btn_precompute"
+                style="@style/ValueChip"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="开"
+                tools:ignore="HardcodedText" />
+        </LinearLayout>
+
+        <TextView
+            style="@style/StepHint"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="β 测试版：对方思考时提前计算；发热明显可关闭"
+            tools:ignore="HardcodedText" />
+
         <!-- 检查更新：仅手动触发（无启动自检/后台轮询），查 GitHub 正式 stable
              Release 与构建日期比较；结果弹窗/Toast，新版跳 Release 页手动下载 -->
         <LinearLayout

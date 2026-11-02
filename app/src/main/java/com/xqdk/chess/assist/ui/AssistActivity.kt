@@ -42,15 +42,18 @@ class AssistActivity : AppCompatActivity() {
     companion object {
 
         /**
-         * 免责声明（四条条款，对齐 Cabinet 口径；首启弹窗 / About / 帮助页 / README
-         * 共用同一文案，任何修改需四处同步）。
+         * 免责声明（三条条款，对齐 Cabinet 口径；首启弹窗 / About / 帮助页 / README
+         * 共用同一文案，任何修改需四处同步，见 法律应对预案.md 模板 E）。
+         *
+         * 原第三条"仅供学习研究，24 小时内自行删除"已删（2026-11-02，与内阁同款
+         * 处置）：本项目以 GPL-3.0 永久授权公开分发，该条款与授权自相矛盾、无
+         * 法律效力且易被截图断章——免责意图由"现状"条款与第二条使用边界承担。
          */
         const val DISCLAIMER =
             "本软件（象棋迪克）为象棋学习辅助工具，仅供个人学习、复盘研究与技术交流使用。请在使用前仔细阅读以下条款：\n\n" +
             "一、本软件仅通过系统录屏授权识别画面并以悬浮窗显示走法建议，不包含自动走子、触摸注入、无障碍服务、Root/Xposed 等功能，所有着法均由玩家手动操作。\n\n" +
             "二、严禁将本软件用于任何正式比赛、等级分对局、网络对局平台或赌博等违反平台规则与法律法规的场景；由此产生的一切后果由使用者本人承担。\n\n" +
-            "三、本软件仅供学习研究，请于获取后 24 小时内自行删除。\n\n" +
-            "四、本软件按\"现状\"提供，不对软件的可用性与准确性作任何保证，不对因使用本软件造成的任何直接或间接损失承担责任。\n\n" +
+            "三、本软件按\"现状\"提供，不对软件的可用性与准确性作任何保证，不对因使用本软件造成的任何直接或间接损失承担责任。\n\n" +
             "点击\"同意并继续\"即表示您已阅读、理解并同意以上全部条款。"
 
         /** 鸣谢（品牌说明中唯一保留"象棋鱼"字眼处） */
@@ -130,6 +133,7 @@ class AssistActivity : AppCompatActivity() {
             service?.applyOverlayTheme(OverlayTheme.fromKey(cfg.overlayTheme))
             service?.setRecognizerEngine(cfg.recognizerEngine)
             service?.setSearchMode(cfg.searchMode == "time")
+            service?.setPrecomputeEnabled(cfg.precomputeEnabled)
             refreshStatus()
         }
 
@@ -297,6 +301,26 @@ class AssistActivity : AppCompatActivity() {
                     on -> "诊断已开启：文件创建失败，请用 logcat 过滤 AssistService 采集"
                     else -> "诊断已关闭，文件已封口"
                 }, if (on) Toast.LENGTH_LONG else Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "已保存，下次启动识别时生效", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        // 空闲预计算（β）：对方思考期提前计算，命中预判线零等待出着。连线页开关
+        // 热生效（服务在线即时生效；未绑定也先落盘配置，服务启动读到即生效——与
+        // 诊断开关同口径）；β 期不做档位 UI，搜索参数与常规完全一致
+        val btnPrecompute = findViewById<Button>(R.id.btn_precompute)
+        btnPrecompute.text = if (cfg.precomputeEnabled) "开" else "关"
+        btnPrecompute.setOnClickListener {
+            val on = !cfg.precomputeEnabled
+            cfg.precomputeEnabled = on
+            btnPrecompute.text = if (on) "开" else "关"
+            val svc = service
+            if (svc != null) {
+                svc.setPrecomputeEnabled(on)
+                Toast.makeText(this,
+                    if (on) "预计算已开启（β）" else "预计算已关闭",
+                    Toast.LENGTH_SHORT).show()
             } else {
                 Toast.makeText(this, "已保存，下次启动识别时生效", Toast.LENGTH_SHORT).show()
             }

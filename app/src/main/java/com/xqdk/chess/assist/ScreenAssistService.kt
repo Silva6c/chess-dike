@@ -129,6 +129,9 @@ class ScreenAssistService : Service() {
         overlayPanel?.let { p -> runCatching { windowManager?.removeView(p) } }
         overlayPanel = null
         paused = true
+        // 预判缓存随会话作废（β 保守口径：重连后同一局面重新计算，避免跨会话陈旧命中）
+        ponderCache.clear()
+        lastPreFen = null
         releaseCapture()
         setStatus("已关闭（识别与录屏均已停止，可在连线页重新启动）")
         stopSelf()
@@ -330,6 +333,8 @@ class ScreenAssistService : Service() {
         if (hidx < 0) config.hashMb = hashLevels[0]
         // 变招路数与持久化设置对齐（1-3；1 路算力最全，默认 3 保留候选展示）
         multiPv = config.multiPv
+        // 空闲预计算（β）开关对齐持久化配置（默认开；连线页设置行热切换）
+        precomputeEnabled = config.precomputeEnabled
         // 思考制式与时间档位对齐持久化配置（不在表内取默认 3 秒档并写回）
         searchModeIsTime = config.searchMode == "time"
         val tidx = timeLevels.indexOfFirst { it.second == config.searchTimeMs }
@@ -426,6 +431,10 @@ class ScreenAssistService : Service() {
         invalidStreak = 0
         recMissStreak = 0
         cropUnstableStreak = 0
+        // 预判缓存/预计算局面随会话作废（与 stopGuidance 同口径，扫描 P2-2）：
+        // 录屏被系统侧停止再重连这条重启路径原实现会漏，旧局面的预判线不带入新会话
+        ponderCache.clear()
+        lastPreFen = null
         // 新会话识别立即放行：清退避/burst/成本历史（旧会话的失败退避不带入）
         onnxPacer.reset()
         yoloPacer.reset()
@@ -994,6 +1003,21 @@ class ScreenAssistService : Service() {
         return newLog?.displayPath
     }
 
+    /**
+     * 空闲预计算（β）开关（连线页设置行，热生效）：开启后对方回合预案搜索的结果
+     * 进预判缓存，我方回合命中预判线零等待出着；关闭立即清缓存并回落常规行为
+     * （不记预计算局面、不喂缓存）。主线程调用（按钮点击路径）。
+     */
+    fun setPrecomputeEnabled(on: Boolean) {
+        config.precomputeEnabled = on
+        precomputeEnabled = on
+        Log.i(TAG, "precompute -> $on")
+        if (!on) {
+            ponderCache.clear()
+            lastPreFen = null
+        }
+    }
+
     /** 按配置初始化识别引擎；onnx 模型加载重（~21.5MB），放后台线程，期间帧走跳过逻辑 */
     private fun initEngine(name: String) {
         engineName = name
@@ -1085,6 +1109,7 @@ class ScreenAssistService : Service() {
         stableUcci = null
         stableSince = 0L
         searchSettled = false
+        precomputeHit = false
         // 渲染特征值一并作废：新局面的第一条 info 行必须触发渲染
         lastRenderedDepth = -1
         lastRenderedBest = null
@@ -1095,8 +1120,9 @@ class ScreenAssistService : Service() {
         try { MoveChinese.describe(fen, ucci) } catch (e: Exception) { ucci }
 
     /**
-     * 分析调度（worker 线程）：我方回合先查开局库（与对弈同款，命中即秒出且不占用引擎），
-     * 未命中走引擎深度搜索；对方回合直接引擎预案。
+     * 分析调度（worker 线程）：我方回合先查开局库（与对弈同款，命中即秒出且不占用
+     * 引擎），未命中先查预判缓存（空闲预计算 β），再走引擎深度搜索；对方回合引擎
+     * 预案（预计算开 = 搜索结果进预判缓存，供对方落子命中时零等待出着）。
      */
     private fun scheduleAnalysis() {
         workerHandler.post {
@@ -1112,12 +1138,38 @@ class ScreenAssistService : Service() {
                     mainHandler.post { postRender() }
                     return@post
                 }
+                // 空闲预计算（β）：桔库未命中后查预判缓存——对方思考期同参搜索过的
+                // 预判线，若其首着 applyUcci 后与识别确认 FEN 全串相等，说明对方走了
+                // 预判着：我方建议零等待直接显示且**不再发引擎请求**（缓存即同参完整
+                // 搜索结果，等价于"这次搜索已提前完成"，省一次搜索即省发热）。分数/
+                // 深度沿用预判线（预判着法就是该线假设的对方应着，评估对我方局面直接
+                // 有效）；识别误读的局面自然套不中 → miss 走常规搜索，无误报空间
+                if (precomputeEnabled) {
+                    val hit = ponderCache.pick(fen)
+                    if (hit != null && hit.pv.size >= 2) {
+                        val ourPv = hit.pv.drop(1)
+                        val best = ourPv.first()
+                        lastAnalysis = AnalysisResult(fen, redGo, best,
+                            listOf(AnalysisLine(1, hit.depth, hit.redScoreCp, hit.mateIn, ourPv)))
+                        // 深算结果直接成熟定着（✓），无需走 SUGGEST_STABLE_MS 等待
+                        searchSettled = true
+                        stableUcci = best
+                        stableSince = System.currentTimeMillis()
+                        precomputeHit = true
+                        diagLog?.appendEvent("预判命中", fen)
+                        mainHandler.post { postRender() }
+                        return@post
+                    }
+                }
             }
             bookMoves = null
             if (!engineReady) {
                 mainHandler.post { setStatus(engineErrorText ?: "引擎预热中…") }
                 return@post
             }
+            // 对方回合预案搜索（同参）：记住局面 FEN，onSearchDone 据此把最终结果
+            // 喂进预判缓存（预计算关闭时不记，缓存也不消费）
+            if (!myTurn && precomputeEnabled) lastPreFen = fen
             analysisEngine?.request(fen)
             if (myTurn) mainHandler.post { setStatus("引擎思考中…") }
         }
@@ -1140,6 +1192,26 @@ class ScreenAssistService : Service() {
             null
         }
     }
+
+    // ==================== 空闲预计算（β，v3.3） ====================
+
+    /**
+     * 开关（连线页设置行热切换；onCreate 自 config 对齐初值，默认开）。关闭 =
+     * 不记预计算局面、不喂缓存、命中查询跳过——行为与 v3.2 完全一致。
+     */
+    @Volatile private var precomputeEnabled = true
+
+    /**
+     * 最近一次对方回合（预计算）请求的 FEN：onSearchDone 据此把该次搜索的最终
+     * 结果喂进预判缓存。@Volatile 跨线程（worker 写 / 引擎线程读，与 currentFen
+     * 同款约定）。
+     */
+    @Volatile private var lastPreFen: String? = null
+
+    /** 预判命中标记：命中路径给候选文案加"（预判β）"后缀；resetSuggestionState 清零 */
+    @Volatile private var precomputeHit = false
+
+    private val ponderCache = PonderCache()
 
     // 诊断引擎行的局面级计时（诊断开关关闭时仅空转赋值，开销可忽略）
     @Volatile private var engineRowFen: String? = null
@@ -1188,8 +1260,19 @@ class ScreenAssistService : Service() {
         }
 
         override fun onSearchDone(result: AnalysisResult) {
+            // 空闲预计算（β）：对方回合预计算搜索的最终结果进预判缓存。必须在下方
+            // currentFen 同局面守卫**之前**——bestmove 返回时局面多半已推进（对方落子
+            // 已被确认），守卫会把预计算结果当过期挡掉。只喂**完整跑完**的搜索：
+            // interrupted=对方秒落子/闪电出着打断了它，行数浅不值得缓存（扫描 P2-1，
+            // 此门槛同时覆盖深度制与时间制）
+            if (precomputeEnabled && result.fen == lastPreFen && !result.interrupted) {
+                ponderCache.feed(result.fen, result)
+            }
             if (result.fen != currentFen) return
             lastAnalysis = result
+            // 常规搜索结果落定即覆盖命中种子（扫描 P3-2）：此后展示的是真实搜索，
+            // "（预判β）"标记不得残留张冠李戴
+            precomputeHit = false
             searchSettled = true
             diagLog?.appendEngine(result.fen, result.bestLine?.depth ?: 0,
                 System.currentTimeMillis() - engineRowStartTs, result.bestUcci, done = true)
@@ -1238,13 +1321,18 @@ class ScreenAssistService : Service() {
         // 高约 197dp（棋盘 185 主导）。⚠ 注释算式加和是 393，以代码值 dp(392) 为准
         val panelW = panel.dp(392)
         val panelH = panel.dp(197)
-        val (px0, py0) = config.overlayPos
+        // 位置恢复：hasOverlayPos=false（从未拖动过）走默认底部中央；true 时按归一化
+        // 值恢复（允许负/超 1——贴边停靠会挂进状态栏/导航栏区域，恢复后由钳制归位）
+        val savedPos = if (config.hasOverlayPos) config.overlayPos else null
         // 默认位置：屏幕底部中央的空白区（多数象棋 App 棋盘下方有空余区域，
-        // 不遮挡棋盘）；持久化位置按旧面板尺寸归一化，面板尺寸变化后可能整体出屏 => 钳回屏内
-        val x = (if (px0 < 0) (availW - panelW) / 2 else (px0 * availW).toInt())
-            .coerceIn(0, max(0, availW - panelW))
-        val y = (if (py0 < 0) availH - panelH else (py0 * availH).toInt())
-            .coerceIn(0, max(0, availH - panelH))
+        // 不遮挡棋盘）；持久化位置按旧面板尺寸归一化，面板尺寸变化后可能整体出屏
+        // => 钳回（拖动/落位共用 OverlayPanelView.clampX/Y 同一口径：垂直允许
+        // 贴边下探，保留 PARK_KEEP_DP 可抓取）
+        val keepPx = panel.dp(OverlayPanelView.PARK_KEEP_DP)
+        val x = (if (savedPos == null) (availW - panelW) / 2 else (savedPos.first * availW).toInt())
+            .let { OverlayPanelView.clampX(it, panelW, availW) }
+        val y = (if (savedPos == null) availH - panelH else (savedPos.second * availH).toInt())
+            .let { OverlayPanelView.clampY(it, panelH, availH, keepPx) }
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -1284,6 +1372,9 @@ class ScreenAssistService : Service() {
         // Cabinet 踩坑教训 ②，addView 后还需 panel.post 二次应用）
         panel.applyTheme(OverlayTheme.fromKey(config.overlayTheme))
         panel.setDragHandle(params, wm) {
+            // hasOverlayPos 哨兵位：归一化值允许为负（贴边上探挂进状态栏区域），
+            // "保存过没有"不能再靠负值判断（2026-11-02 扫描 P1-1）
+            config.hasOverlayPos = true
             config.overlayPos = params.x.toFloat() / availW to params.y.toFloat() / availH
         }
         wm.addView(panel, params)
@@ -1780,7 +1871,9 @@ class ScreenAssistService : Service() {
                     arrowFrom = arrow.first
                     arrowTo = arrow.second
                     candidateText = (if (selectedCandidate > 0) "备选${selectedCandidate + 1} $chs" else "建议 $chs") +
-                        if (suggestMature) " ✓" else "（暂定）"
+                        (if (suggestMature) " ✓" else "（暂定）") +
+                        // 空闲预计算（β）命中标记：本建议来自对方思考期的提前深算
+                        (if (precomputeHit) "（预判β）" else "")
                     advantageText = "${lineScoreText(line)} 深${line.depth}"
                     // 色调按我方视角（红方视角分数与我方阵营同向为 GOOD），执黑时不再红优显示"好"色
                     advantageTone = if ((line.redScoreCp >= 0) == mySideIsRed()) QiTone.GOOD else QiTone.BAD

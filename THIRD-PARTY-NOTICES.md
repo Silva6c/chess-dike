@@ -27,7 +27,7 @@
 | onnxruntime-android | 1.31.1 | MIT（升级后以官方声明为准，1.x 全系 MIT） |
 | sqliteassethelper | 2.0.1 | Apache-2.0 |
 | androidx / material / kotlin stdlib 等 | 见 libs.versions.toml | Apache-2.0 |
-| Robolectric（仅测试） | 4.14.1 | MIT |
+| Robolectric（仅测试） | 4.17 | MIT |
 | JUnit 4（仅测试） | 4.13.2 | EPL-1.0 |
 
 ## 4. 内嵌源码模块
