@@ -14,7 +14,7 @@ material = "1.12.0"
 activity = "1.9.3"
 constraintlayout = "2.1.4"
 # 依赖版本收编：原先散落在 build.gradle.kts 的硬编码统一入 catalog（升级改这里）
-tflite = "2.14.0"
+tflite = "2.17.0"
 # 1.31.1（Cabinet 674a6d0 同版）：模型加载 1089→623ms、单帧 99~150ms（模拟器实测、
 # FEN 逐字一致）；1.25.0 起 Android 16KB page size 对齐（Google Play 硬要求）。
 # XNNPACK EP 维持不用——cls 模型主力算子 MatMulInteger 不受支持（收益上限 <5%，
