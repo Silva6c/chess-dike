@@ -20,18 +20,6 @@
         <item name="android:gravity">center</item>
     </style>
 
-    <!-- 底部文字入口（帮助/关于）：无底无边，12sp 次级灰绿，48dp 触控目标 -->
-    <style name="MainTextButton" parent="">
-        <item name="android:background">@drawable/main_text_btn_bg</item>
-        <item name="backgroundTint">@null</item>
-        <item name="android:textColor">@color/xq_muted</item>
-        <item name="android:textSize">12sp</item>
-        <item name="android:letterSpacing">0.08</item>
-        <item name="android:minWidth">64dp</item>
-        <item name="android:minHeight">48dp</item>
-        <item name="android:gravity">center</item>
-    </style>
-
     <!-- ==== 连线页样式（美学终稿 §3.2 三步授权清单与设置项）==== -->
 
     <!-- 步骤行：卡片面 + 1dp 描边（背景见 step_row_bg），序号圆/胶囊由代码回填状态 -->

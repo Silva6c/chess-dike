@@ -8,7 +8,7 @@ import org.junit.Test
 
 /**
  * 引擎 info 行解析层的纯 JVM 单测（parseInfo / MutableAnalysisLine.toAnalysisLine /
- * AnalysisLine.scoreText，抽取自 AnalysisEngine——逻辑零改动，此处冻结行为契约）。
+ * AnalysisLine.scoreText / isRedFavored）。
  *
  * 【雷区】score 视角语义：pikafish info 的 score 恒为"走子方视角"，红黑换算只发生在
  * toAnalysisLine(redGo)。这些用例锁定换算方向——改反了悬浮窗"红方优势/劣势"与
@@ -92,12 +92,26 @@ class AnalysisParseTest {
     }
 
     @Test
-    fun `scoreText 格式契约`() {
-        assertEquals("+2.60", AnalysisLine(redScoreCp = 260).scoreText())
-        assertEquals("-1.50", AnalysisLine(redScoreCp = -150).scoreText())
+    fun `scoreText 恒为正数幅度`() {
+        // 2026-11-03 用户报告：旧版带符号格式与"红方优势/劣势"标签叠加出"红方优势 -M3"。
+        // 契约改为：scoreText 只出幅度，方向由标签（isRedFavored）承担
+        assertEquals("2.60", AnalysisLine(redScoreCp = 260).scoreText())
+        assertEquals("1.50", AnalysisLine(redScoreCp = -150).scoreText())
         assertEquals("M3", AnalysisLine(mateIn = 3).scoreText())
-        assertEquals("-M2", AnalysisLine(mateIn = -2).scoreText())
-        assertEquals("+0.00", AnalysisLine().scoreText())
+        assertEquals("M2", AnalysisLine(mateIn = -2).scoreText())
+        assertEquals("0.00", AnalysisLine().scoreText())
+    }
+
+    @Test
+    fun `isRedFavored 杀棋行按 mateIn 符号判方向`() {
+        // 回归锁（2026-11-03 用户报告）：杀棋行 redScoreCp 恒 0，用分数判方向
+        // 会把"红方被杀"判成红方优势（旧版显示"红方优势 -M3"、好色）
+        assertTrue(AnalysisLine(mateIn = 3).isRedFavored)
+        assertTrue(!AnalysisLine(mateIn = -3).isRedFavored)
+        // 分数行维持原口径：>=0 红优
+        assertTrue(AnalysisLine(redScoreCp = 260).isRedFavored)
+        assertTrue(!AnalysisLine(redScoreCp = -150).isRedFavored)
+        assertTrue(AnalysisLine().isRedFavored)
     }
 
     @Test

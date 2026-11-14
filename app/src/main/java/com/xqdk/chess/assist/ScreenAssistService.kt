@@ -1432,6 +1432,35 @@ class ScreenAssistService : Service() {
         return px0 < bx1 && px1 > bx0 && py0 < by1 && py1 > by0
     }
 
+    /** 切换候选着法（变招按钮/点迷你棋盘/库命中态双击的共用入口） */
+    private fun cycleCandidate() {
+        val n = maxOf(bookMoves?.size ?: 0, lastAnalysis?.lines?.size ?: 0)
+        if (n > 0) {
+            selectedCandidate = (selectedCandidate + 1) % n
+            postRender()
+        }
+    }
+
+    /**
+     * 双击小棋盘（3s 内两下）= 单次三变解析：临时 MultiPV=3 重搜当前局面，常规
+     * 变招档不变，下一局面自动回落（引擎侧单次多路槽按 FEN 配对消费一次）。
+     * 开局库命中时渲染优先展示库内候选、引擎三变不可见——tap2 落回候选切换，
+     * 保持每次点击都有响应。
+     */
+    private fun onTripleTap() {
+        if (paused || manualMode) return
+        val fen = currentFen
+        if (fen.isEmpty() || !engineReady) return
+        if (tracker.redGo == mySideIsRed() && !bookMoves.isNullOrEmpty()) {
+            cycleCandidate()
+            return
+        }
+        selectedCandidate = 0
+        analysisEngine?.requestOneShotPv(fen, 3)
+        diagLog?.appendEvent("档位", "双击三变：临时 MultiPV=3 重搜当前局面")
+        setStatus("临时三变解析…")
+    }
+
     private fun onOverlayAction(action: OverlayAction) {
         when (action) {
             OverlayAction.PAUSE -> {
@@ -1442,13 +1471,8 @@ class ScreenAssistService : Service() {
                 // 关闭悬浮窗：停止录屏、移除面板、停止指导（与录制耦合，之后可在连线页重新授权启动）
                 stopGuidance()
             }
-            OverlayAction.CYCLE_CANDIDATE -> {
-                val n = maxOf(bookMoves?.size ?: 0, lastAnalysis?.lines?.size ?: 0)
-                if (n > 0) {
-                    selectedCandidate = (selectedCandidate + 1) % n
-                    postRender()
-                }
-            }
+            OverlayAction.CYCLE_CANDIDATE -> cycleCandidate()
+            OverlayAction.TRIPLE_ANALYSIS -> onTripleTap()
             OverlayAction.UNDO -> undoOneStep()
             OverlayAction.MANUAL -> toggleManualMode()
             OverlayAction.FLIP_TURN -> {
@@ -1875,8 +1899,9 @@ class ScreenAssistService : Service() {
                         // 空闲预计算（β）命中标记：本建议来自对方思考期的提前深算
                         (if (precomputeHit) "（预判β）" else "")
                     advantageText = "${lineScoreText(line)} 深${line.depth}"
-                    // 色调按我方视角（红方视角分数与我方阵营同向为 GOOD），执黑时不再红优显示"好"色
-                    advantageTone = if ((line.redScoreCp >= 0) == mySideIsRed()) QiTone.GOOD else QiTone.BAD
+                    // 色调按我方视角（红方视角与我方阵营同向为 GOOD）；isRedFavored 对杀棋行
+                    // 走 mateIn 符号（redScoreCp 恒 0 不可用），执黑被杀时不再亮"好"色
+                    advantageTone = if (line.isRedFavored == mySideIsRed()) QiTone.GOOD else QiTone.BAD
                     candidateIndex = selectedCandidate + 1
                     candidateCount = lines.size
                 } else if (ucci == "(none)") {
@@ -1898,8 +1923,9 @@ class ScreenAssistService : Service() {
                     val myDesc = describeSafe(AssistBoard.applyUcci(fen, oppU), myU)
                     candidateText = "若对方走$oppDesc\n我方应$myDesc"
                     advantageText = "${lineScoreText(line)} 深${line.depth}"
-                    // 色调按我方视角（红方视角分数与我方阵营同向为 GOOD），执黑时不再红优显示"好"色
-                    advantageTone = if ((line.redScoreCp >= 0) == mySideIsRed()) QiTone.GOOD else QiTone.BAD
+                    // 色调按我方视角（红方视角与我方阵营同向为 GOOD）；isRedFavored 对杀棋行
+                    // 走 mateIn 符号（redScoreCp 恒 0 不可用），执黑被杀时不再亮"好"色
+                    advantageTone = if (line.isRedFavored == mySideIsRed()) QiTone.GOOD else QiTone.BAD
                 }
             }
             myTurn && engineReady && fen.isNotEmpty() -> {
@@ -1938,8 +1964,10 @@ class ScreenAssistService : Service() {
     }
 
     private fun lineScoreText(line: AnalysisLine): String {
-        val adv = line.scoreText()
-        return if (line.redScoreCp >= 0) "红方优势 $adv" else "红方劣势 $adv"
+        // 方向由标签承担、数值恒正（scoreText 返回幅度）：杀棋行 redScoreCp 恒 0，
+        // 标签必须用 isRedFavored（mateIn 符号）判——旧版用 redScoreCp>=0 时
+        // "红方被杀"也标成"红方优势"并拼出"-M3"（2026-11-03 用户报告）
+        return if (line.isRedFavored) "红方优势 ${line.scoreText()}" else "红方劣势 ${line.scoreText()}"
     }
 
     /** ucci(4字符) -> 内部 (x,y) 起止 */

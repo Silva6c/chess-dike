@@ -10,9 +10,9 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * 复现"启动闪退"回归：launcher 已直指 AssistActivity（2026-10-29 砍主页跳转层，
- * 原 MainActivity → button_link 中间层移除），在 JVM 内完整启动连线页验证不闪退；
- * 主按钮/状态行/帮助与关于入口的存在性一并覆盖。若启动链路存在异常，
+ * 复现"启动闪退"回归：连线页由落地页进入（2026-11-09 落地页接管 launcher，
+ * 帮助/关于/免责上移），在 JVM 内完整启动连线页验证不闪退；
+ * 主按钮/状态行的存在性一并覆盖。若启动链路存在异常，
  * 测试将抛出带完整堆栈的失败，方便定位。
  */
 @RunWith(RobolectricTestRunner::class)
@@ -20,12 +20,10 @@ import org.robolectric.annotation.Config
 class AssistLaunchRobolectricTest {
 
     @Test
-    fun `launcher AssistActivity starts without crash`() {
+    fun `assist activity starts without crash`() {
         val assist = Robolectric.buildActivity(AssistActivity::class.java).setup().get()
         assertNotNull("连线页应有主按钮", assist.findViewById(R.id.btn_start_capture))
         assertNotNull("连线页应有状态行", assist.findViewById(R.id.tv_auto_status))
-        assertNotNull("连线页应有帮助入口", assist.findViewById(R.id.button_help))
-        assertNotNull("连线页应有关于入口", assist.findViewById(R.id.button_about))
     }
 
     @Test

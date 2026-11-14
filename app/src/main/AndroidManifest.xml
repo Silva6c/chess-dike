@@ -23,16 +23,27 @@
             android:name=".views.WebviewActivity"
             android:screenOrientation="portrait"
             android:exported="false" />
+        <!-- 开局分流落地页（2026-11-09）：launcher，学习/连线双便当盒卡 + 帮助/关于 +
+             免责弹窗（随 launcher 语义一并迁入） -->
         <activity
-            android:name=".assist.ui.AssistActivity"
+            android:name=".LauncherActivity"
             android:screenOrientation="portrait"
-            android:launchMode="singleTask"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- 连线工作页：由落地页进入（2026-10-29 曾一度直接作 launcher，落地页引入后让位） -->
+        <activity
+            android:name=".assist.ui.AssistActivity"
+            android:screenOrientation="portrait"
+            android:launchMode="singleTask"
+            android:exported="false" />
+        <activity
+            android:name=".learn.LearnActivity"
+            android:screenOrientation="portrait"
+            android:exported="false" />
         <service
             android:name=".assist.ScreenAssistService"
             android:exported="false"

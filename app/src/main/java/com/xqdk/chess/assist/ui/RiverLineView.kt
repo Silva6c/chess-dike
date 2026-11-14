@@ -17,9 +17,12 @@ import kotlin.math.cos
 /**
  * 河界线（美学终稿 §2.3 动效一"线的呼吸"）：1.5dp 朱砂横线。
  * 静态 = 纯色朱砂；运行态 = [setBreathing](true) 启动 2.4s 线性无限循环：
- * 亮段（提亮朱砂 #E8936F）沿 240% 渐变域平移（REPEAT 平铺循环无缝），
- * 叠加整线明暗脉动（透明度 55%↔100% 余弦一周期）——双通道叠加保证 1.5dp 细线上
- * 呼吸肉眼可辨。动效预算纪律：本动画仅运行态出现，静止即停。
+ * 带平台的亮段（提亮朱砂 #E8936F，平台≈29% 线宽）沿 240% 渐变域平移（REPEAT
+ * 平铺循环无缝），叠加整线明暗脉动（透明度 0.35↔1.0 余弦一周期）。
+ * 【可见性依据（2026-11-09 用户两轮报告"呼吸不明显"后加强）】浅纸底
+ * （xq_paper #F6F3ED）上峰色亮度趋近背景——亮段扫过实为"变淡"，可见度主载体
+ * 是深脉动；渐变必须有实平台（旧版 0.3–0.7 软坡峰只在单点，1.5dp 线上不可辨）。
+ * 动效预算纪律：本动画仅运行态出现，静止即停。
  */
 class RiverLineView @JvmOverloads constructor(
     context: Context,
@@ -33,8 +36,8 @@ class RiverLineView @JvmOverloads constructor(
         private const val DOMAIN_SCALE = 2.4f
         /** 呼吸亮峰色（视觉稿高亮段 #D97057 再提亮一档，拉开与朱砂基色的对比） */
         private const val ZHU_BRIGHT = 0xFFE8936F.toInt()
-        /** 整线明暗脉动的透明度下限（0.55↔1.0） */
-        private const val ALPHA_MIN = 0.55f
+        /** 整线明暗脉动的透明度下限（0.35↔1.0；0.55 在 1.5dp 线上不可辨，2026-11-09 加深） */
+        private const val ALPHA_MIN = 0.35f
     }
 
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -61,9 +64,10 @@ class RiverLineView @JvmOverloads constructor(
 
     private fun buildShader(): LinearGradient = LinearGradient(
         0f, 0f, width * DOMAIN_SCALE, 0f,
-        intArrayOf(paint.color, paint.color, ZHU_BRIGHT, paint.color, paint.color),
-        // 亮段占域 40%（0.3–0.7）：窄段在 1.5dp 线上存在感不足
-        floatArrayOf(0f, 0.3f, 0.5f, 0.7f, 1f),
+        intArrayOf(paint.color, paint.color, ZHU_BRIGHT, ZHU_BRIGHT, paint.color, paint.color),
+        // 亮段带实平台（0.44–0.56 ≈ 29% 线宽全亮）+ 窄坡（各 0.06 域 ≈ 14% 线宽）：
+        // 旧版 0.3–0.7 无平台软坡，峰值亮度在细线上从未被看见（2026-11-09 用户报告）
+        floatArrayOf(0f, 0.38f, 0.44f, 0.56f, 0.62f, 1f),
         Shader.TileMode.REPEAT,
     )
 

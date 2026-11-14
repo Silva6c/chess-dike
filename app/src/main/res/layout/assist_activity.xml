@@ -233,32 +233,6 @@
             android:textStyle="bold"
             tools:ignore="HardcodedText" />
 
-        <!-- 悬浮窗主题：点按循环（深色玻璃→纯黑 OLED→浅色纸感），持久化键不变 -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
-
-            <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="悬浮窗主题"
-                android:textColor="@color/xq_ink_text"
-                android:textSize="13sp"
-                tools:ignore="HardcodedText" />
-
-            <Button
-                android:id="@+id/btn_overlay_theme"
-                style="@style/ValueChip"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="深色玻璃"
-                tools:ignore="HardcodedText" />
-        </LinearLayout>
-
         <!-- 识别引擎：ONNX 角点式（默认，泛化好）/ YOLO 检测式（回退），运行中热切换。
              RadioButton 芯片化：button=@null + 选中态描边/文字色（chip_segment 同构） -->
         <LinearLayout
@@ -345,6 +319,33 @@
             </RadioGroup>
         </LinearLayout>
 
+        <!-- 悬浮窗主题：点按循环（深色玻璃→纯黑 OLED→浅色纸感），持久化键不变。
+             位置在思考制式下方（2026-11-10 用户拍板） -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="悬浮窗主题"
+                android:textColor="@color/xq_ink_text"
+                android:textSize="13sp"
+                tools:ignore="HardcodedText" />
+
+            <Button
+                android:id="@+id/btn_overlay_theme"
+                style="@style/ValueChip"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="深色玻璃"
+                tools:ignore="HardcodedText" />
+        </LinearLayout>
+
         <!-- 性能诊断：识别分段计时日志开关（默认关，开启后 ONNX 重建并输出五段
              耗时到 logcat）。诊断用途，真机排查识别耗时用，平时关闭零开销 -->
         <LinearLayout
@@ -407,66 +408,17 @@
             android:text="β 测试版：对方思考时提前计算；发热明显可关闭"
             tools:ignore="HardcodedText" />
 
-        <!-- 检查更新：仅手动触发（无启动自检/后台轮询），查 GitHub 正式 stable
-             Release 与构建日期比较；结果弹窗/Toast，新版跳 Release 页手动下载 -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
+        <!-- 检查更新已上移落地页页脚（2026-11-10 用户拍板），本页不再承载 -->
 
-            <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="检查更新"
-                android:textColor="@color/xq_ink_text"
-                android:textSize="13sp"
-                tools:ignore="HardcodedText" />
-
-            <Button
-                android:id="@+id/btn_check_update"
-                style="@style/ValueChip"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="检查"
-                tools:ignore="HardcodedText" />
-        </LinearLayout>
-
-        <!-- 合规声明（原段落文案语义全保留） -->
+        <!-- 合规声明（与 README/免责弹窗/help.html 四处同步口径，2026-11-09 补删残留的"24h 自行删除"条款） -->
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="28dp"
             android:lineSpacingExtra="2dp"
-            android:text="合规声明：本功能仅通过系统录屏授权做画面识别并显示走法建议，属于象棋学习辅助工具，仅供学习研究，请于获取后24小时内自行删除。不包含自动走子、触摸注入、无障碍服务、Root/Xposed 或读取其他应用数据；对局中的所有着法均由玩家手动操作。"
+            android:text="合规声明：本功能仅通过系统录屏授权做画面识别并显示走法建议，属于象棋学习辅助工具，仅供学习研究。不包含自动走子、触摸注入、无障碍服务、Root/Xposed 或读取其他应用数据；对局中的所有着法均由玩家手动操作。"
             android:textColor="@color/xq_muted"
             android:textSize="11sp"
             tools:ignore="HardcodedText" />
-
-        <!-- 底部入口：帮助（本地帮助页）/ 关于（本地对话框）——原主页文字入口迁入 -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:gravity="center_horizontal"
-            android:orientation="horizontal">
-
-            <Button
-                android:id="@+id/button_help"
-                style="@style/MainTextButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/main_help" />
-
-            <Button
-                android:id="@+id/button_about"
-                style="@style/MainTextButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="24dp"
-                android:text="@string/main_about" />
-        </LinearLayout>
     </LinearLayout>
 </ScrollView>

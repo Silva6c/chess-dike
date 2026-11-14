@@ -9,6 +9,7 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Rect
 import android.graphics.RectF
+import android.os.SystemClock
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
@@ -89,8 +90,16 @@ class OverlayChessView @JvmOverloads constructor(
     /** 用户点击棋盘切换候选时回调（非手动模式） */
     var onNextCandidate: (() -> Unit)? = null
 
+    /** 双击棋盘（窗口内两下）触发单次三变解析回调（非手动模式） */
+    var onTripleAnalysis: (() -> Unit)? = null
+
     /** 手动模式点格回调（canonical x,y；未命中棋盘交点不回调） */
     var onCellTap: ((x: Int, y: Int) -> Unit)? = null
+
+    /** 上次非手动抬起时刻（双击检测）；-1 = 无前序。触发三变后重置——
+     *  第三次点击重起新对。哨兵必须显式判断（Robolectric 的 elapsedRealtime
+     *  从 0 起步，"0ms 前点过"的初值会把首下误判成双击） */
+    private var lastBoardTapAt = -1L
 
     // ==== 原版资源（与 ChessView 共用同一套图）====
     private val boardBitmap: Bitmap by lazy {
@@ -150,6 +159,8 @@ class OverlayChessView @JvmOverloads constructor(
         /** "我方"色条颜色（原 Color.parseColor 字符串解析常量化，不该发生在重绘热路径） */
         private const val COLOR_RED_BAR = 0xFFE53935.toInt()
         private const val COLOR_DARK_BAR = 0xFF37474F.toInt()
+        /** 双击三变窗口（用户拍板：3s 内两下小棋盘） */
+        private const val TRIPLE_TAP_WINDOW_MS = 3000L
     }
 
     /** 缩放与棋盘原点（onDraw 中更新） */
@@ -258,7 +269,13 @@ class OverlayChessView @JvmOverloads constructor(
             if (manualMode) {
                 hitCell(event.x, event.y)?.let { onCellTap?.invoke(it.first, it.second) }
             } else {
-                onNextCandidate?.invoke()
+                // 双击三变：窗口内第二次抬起触发单次三变（首下仍走候选切换——
+                // 1 路默认下无候选可切，无副作用；服务端三变会重置候选序号）。
+                // 触发后清空：连点三下 = 切换 → 三变 → 切换，不连发三变
+                val now = SystemClock.elapsedRealtime()
+                val isDouble = lastBoardTapAt >= 0 && now - lastBoardTapAt <= TRIPLE_TAP_WINDOW_MS
+                lastBoardTapAt = if (isDouble) -1L else now
+                if (isDouble) onTripleAnalysis?.invoke() else onNextCandidate?.invoke()
             }
             return true
         }

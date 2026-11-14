@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 开局分流落地页的"便当盒"大卡（美学终稿：卡片面 + 1dp 描边、16dp 圆角、零阴影） -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/xq_surface" />
+    <corners android:radius="16dp" />
+    <stroke
+        android:width="1dp"
+        android:color="@color/xq_line" />
+</shape>

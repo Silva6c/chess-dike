@@ -85,9 +85,11 @@ enum class OverlayTheme(val key: String, val label: String, val palette: QiPalet
         divider = 0x80D05A44.toInt(),
     )),
 
-    /** 浅色纸感：强光环境护眼档，文字整体加深保证对比（身后深色内容为 worst） */
+    /** 浅色纸感：强光环境护眼档，文字整体加深保证对比（身后深色内容为 worst）。
+     *  底色为暖白纸（2026-11-09 用户反馈原蓝灰 #ECEFF1 偏冷显苍白 → 暖白与
+     *  应用纸色系 #F6F3ED 同族），透明度保持 0xE6 对比度契约不变 */
     LIGHT("overlay_light", "浅色纸感", QiPalette(
-        panel = 0xE6ECEFF1.toInt(),
+        panel = 0xE6F8F3E8.toInt(),
         panelStroke = 0x1F000000, panelTopHighlight = 0x1AFFFFFF,
         fg = 0xFF263238.toInt(), muted = 0xFF3F545E.toInt(),
         headline = 0xFF9A5B00.toInt(), jade = 0xFF1B6B32.toInt(), jadeDot = 0xFF2E7D32.toInt(),

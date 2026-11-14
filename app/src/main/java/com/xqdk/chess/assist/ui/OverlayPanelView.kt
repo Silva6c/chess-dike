@@ -37,7 +37,7 @@ class OverlayModel(
     val occludedText: String? = null,
     /** 主状态大字：轮到我方走 / 已停止指导 / 引擎异常…（含 setStatus 覆盖文案） */
     val headlineText: String = "识别中",
-    /** 优势行：红方优势 +0.8 / 胜率约 4%；null 隐藏 */
+    /** 优势行：红方优势 2.60 / 红方劣势 M3（方向由标签承担、数值恒正）；null 隐藏 */
     val advantageText: String? = null,
     val advantageTone: QiTone = QiTone.NONE,
     /** 候选/预案行：建议 炮二平五 ✓ / 若对方走X 我方应Y；null 隐藏 */
@@ -82,6 +82,8 @@ enum class OverlayAction {
     CLOSE,
     /** 切换候选着法（变招） */
     CYCLE_CANDIDATE,
+    /** 单次三变解析（双击小棋盘：临时 MultiPV=3 重搜当前局面，常规档不变） */
+    TRIPLE_ANALYSIS,
     /** 悔棋：回退到上一个已确认局面 */
     UNDO,
     /** 引擎深度档切换（固定深度循环） */
@@ -237,6 +239,7 @@ class OverlayPanelView @JvmOverloads constructor(
             }
         }
         chess.onNextCandidate = { onAction?.invoke(OverlayAction.CYCLE_CANDIDATE) }
+        chess.onTripleAnalysis = { onAction?.invoke(OverlayAction.TRIPLE_ANALYSIS) }
         chess.onCellTap = { x, y -> onCellTap?.invoke(x, y) }
     }
 

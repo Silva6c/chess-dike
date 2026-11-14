@@ -105,6 +105,16 @@ class AnalysisEngine(
     @Volatile private var maxPv: Int = maxPv.coerceIn(1, 3)
     @Volatile private var appliedMultiPv = -1
 
+    /**
+     * 单次多路槽（悬浮窗双击小棋盘"单次三变"）：与请求 FEN 配对，引擎线程在
+     * searchOnce 取局后消费一次，常规 maxPv 全程不动。恢复不放在结果侧——
+     * 同局面打断重搜时"旧搜索的 interrupted bestmove"先于三变结果到达，
+     * 按 onSearchDone 回写会在错误时刻恢复；槽位 FEN 不符（请求被新局面覆盖）
+     * = 意图过期，消费时一并清除回常规档。
+     */
+    @Volatile private var oneShotPv: Int? = null
+    @Volatile private var oneShotFen: String? = null
+
     /** 热更新搜索深度（引擎强度档位），对下一次搜索生效 */
     fun setSearchDepth(depth: Int) {
         searchDepth = depth.coerceIn(6, 40)
@@ -119,6 +129,21 @@ class AnalysisEngine(
     /** 热更新变招路数（MultiPV 1-3），对下一次搜索生效 */
     fun setMultiPv(n: Int) {
         maxPv = n.coerceIn(1, 3)
+    }
+
+    /**
+     * 单次多路请求（双击三变）：打断/排队机制与 [request] 相同，但下一次（且
+     * 仅这一次）对 [fen] 的搜索临时以 [pv] 路 MultiPV 运行，常规变招档不变，
+     * 后续搜索自动回落。调用线程任意。
+     */
+    fun requestOneShotPv(fen: String, pv: Int) {
+        synchronized(lock) {
+            oneShotPv = pv.coerceIn(1, 3)
+            oneShotFen = fen
+            pendingFen = fen
+            stopRequested = true
+            lock.notifyAll()
+        }
     }
 
     /** 热更新 Hash（面板"Hash"按钮）：只在引擎空闲的两次搜索之间下发 setoption */
@@ -268,9 +293,19 @@ class AnalysisEngine(
             eng.setOption("Hash", hashMb)
             appliedHash = hashMb
         }
-        if (appliedMultiPv != maxPv) {
-            eng.setOption("MultiPV", maxPv)
-            appliedMultiPv = maxPv
+        // 单次多路槽（双击三变）：取局后按 FEN 配对消费一次，FEN 不符 = 意图过期
+        // 一并清除回常规档。appliedMultiPv 记账照常——三变后下一次常规搜索
+        // maxPv != applied 自动回写（两次搜索之间 setoption，UCI 规范口径不变）
+        val effectivePv = synchronized(lock) {
+            val os = oneShotPv
+            val osFen = oneShotFen
+            oneShotPv = null
+            oneShotFen = null
+            if (os != null && osFen == fen) os else maxPv
+        }
+        if (appliedMultiPv != effectivePv) {
+            eng.setOption("MultiPV", effectivePv)
+            appliedMultiPv = effectivePv
         }
         // 走子方视角（红=非 b）整次搜索固定：提前一次算好，不在每条 info 行的
         // 结果构造里重复 split（pikafish 深搜期间每秒几十条 info，高频路径省分配）

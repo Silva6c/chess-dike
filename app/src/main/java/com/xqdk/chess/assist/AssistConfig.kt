@@ -104,6 +104,14 @@ class AssistConfig(context: Context) {
         get() = sp.getBoolean(KEY_PRECOMPUTE_ENABLED, true)
         set(value) { sp.edit().putBoolean(KEY_PRECOMPUTE_ENABLED, value).apply() }
 
+    /**
+     * 学习模式执方（"red"/"black"，默认红）。落地页学习模式进页回放；执方芯片
+     * 切换即开新局（LearnActivity 确认对话框后落盘）。
+     */
+    var learnSide: String
+        get() = sp.getString(KEY_LEARN_SIDE, "red") ?: "red"
+        set(value) { sp.edit().putString(KEY_LEARN_SIDE, value).apply() }
+
     companion object {
         private const val KEY_RECOGNIZER_ENGINE = "recognizer_engine"
         private const val KEY_FRAME_W = "frame_w"
@@ -120,5 +128,6 @@ class AssistConfig(context: Context) {
         private const val KEY_OVERLAY_THEME = "overlay_theme"
         private const val KEY_BENCH_PROFILING = "bench_profiling"
         private const val KEY_PRECOMPUTE_ENABLED = "precompute_enabled"
+        private const val KEY_LEARN_SIDE = "learn_side"
     }
 }

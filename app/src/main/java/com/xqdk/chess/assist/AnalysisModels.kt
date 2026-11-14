@@ -1,5 +1,7 @@
 package com.xqdk.chess.assist
 
+import kotlin.math.abs
+
 /**
  * 引擎分析结果模型。
  * 注意：pikafish 的 info score 以"当前走子方（side to move）"视角给出，本模块统一换算为红方视角。
@@ -14,13 +16,21 @@ class AnalysisLine(
     /** 变着（UCCI 4 字母） */
     val pv: List<String> = emptyList(),
 ) {
-    /** 显示的分数文本，如 "+2.60"、"M3"、"-M2" */
+    /** 显示的分数文本（恒为正数幅度，方向由"红方优势/劣势"标签承担）："2.60"、"M3"。
+     *  2026-11-03 用户报告的"红方优势 -M3"即旧版带符号格式与标签叠加的双重负号 */
     fun scoreText(): String {
         val m = mateIn
-        if (m != null) return if (m > 0) "M$m" else "-M${-m}"
-        return if (redScoreCp >= 0) "+%.2f".format(redScoreCp / 100.0)
-        else "%.2f".format(redScoreCp / 100.0)
+        if (m != null) return "M${abs(m)}"
+        return "%.2f".format(abs(redScoreCp) / 100.0)
     }
+
+    /**
+     * 红方视角是否占优。**【雷区】杀棋行（mateIn 非空）的 redScoreCp 恒为 0**（parseInfo
+     * 归零），判方向必须看 mateIn 符号——用 redScoreCp>=0 会让"红方被杀"也判成优势
+     * （2026-11-03 用户报告"红方优势 -M3"的根因，好/坏色调同踩此坑）。
+     */
+    val isRedFavored: Boolean
+        get() = mateIn?.let { it > 0 } ?: (redScoreCp >= 0)
 }
 
 class AnalysisResult(

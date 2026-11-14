@@ -31,43 +31,13 @@ import com.xqdk.chess.assist.ScreenAssistService
 /**
  * 连线工作页（美学终稿 §3.2）：纸底仪器面（识别点阵 + 状态行 + hero + 河界线）+
  * 三步授权清单（几何序号行）+ 主按钮（全 App 唯一主操作：开始/停止连线）+
- * 设置（悬浮窗主题循环 / 识别引擎单选 / 思考制式单选）+ 底部帮助/关于入口。
+ * 设置（悬浮窗主题循环 / 识别引擎单选 / 思考制式单选）。
  * 棋盘识别全自动，此页只负责权限与启停。
- * 本页同时是 launcher（2026-10-29 砍主页跳转层：原"主页 → 开始连线"中间层移除，
- * 打开应用即达连线页；免责弹窗随启动语义一并迁入）。
+ * 由开局分流落地页（LauncherActivity，2026-11-09 引入）进入；帮助/关于/免责弹窗
+ * 已上移落地页（本页不再重复），返回落地页即随退停服务（onDestroy isFinishing）。
  * 交互契约一行不删：每秒轮询、变化才回填、启动守卫、运行中热切换、绑定补应用配置。
  */
 class AssistActivity : AppCompatActivity() {
-
-    companion object {
-
-        /**
-         * 免责声明（三条条款，对齐 Cabinet 口径；首启弹窗 / About / 帮助页 / README
-         * 共用同一文案，任何修改需四处同步，见 法律应对预案.md 模板 E）。
-         *
-         * 原第三条"仅供学习研究，24 小时内自行删除"已删（2026-11-02，与内阁同款
-         * 处置）：本项目以 GPL-3.0 永久授权公开分发，该条款与授权自相矛盾、无
-         * 法律效力且易被截图断章——免责意图由"现状"条款与第二条使用边界承担。
-         */
-        const val DISCLAIMER =
-            "本软件（象棋迪克）为象棋学习辅助工具，仅供个人学习、复盘研究与技术交流使用。请在使用前仔细阅读以下条款：\n\n" +
-            "一、本软件仅通过系统录屏授权识别画面并以悬浮窗显示走法建议，不包含自动走子、触摸注入、无障碍服务、Root/Xposed 等功能，所有着法均由玩家手动操作。\n\n" +
-            "二、严禁将本软件用于任何正式比赛、等级分对局、网络对局平台或赌博等违反平台规则与法律法规的场景；由此产生的一切后果由使用者本人承担。\n\n" +
-            "三、本软件按\"现状\"提供，不对软件的可用性与准确性作任何保证，不对因使用本软件造成的任何直接或间接损失承担责任。\n\n" +
-            "点击\"同意并继续\"即表示您已阅读、理解并同意以上全部条款。"
-
-        /** 鸣谢（品牌说明中唯一保留"象棋鱼"字眼处） */
-        const val CREDITS =
-            "鸣谢：\n" +
-            "· 本项目基于开源项目\"象棋鱼\"（作者 zfdang，GitHub: zfdang/chinese-chess-android）二次开发；\n" +
-            "· YOLO 棋子检测权重文件来自 Vincentzyx/VinXiangQi 项目；\n" +
-            "· ONNX 两步式识别引擎（RTMPose 角点 + Swin 分类）的模型与算法来自 " +
-            "Shirakawa-Kotone/chinese-chess-helper 项目；\n" +
-            "· 引擎框架基座：Pikafish 团队与 DroidFish（Peter Österlund），GPL-3.0 开源授权。"
-
-        /** 免责同意态的 savedInstanceState 键（仅跨配置重建传递，不持久化——冷启动必重弹） */
-        private const val KEY_DISCLAIMER_AGREED = "disclaimer_agreed"
-    }
 
     /** 步骤行状态（几何序号语义：完成玉✓实心 / 待办朱砂描边 / 未开始灰空心） */
     private enum class StepState { DONE, TODO, LOCKED }
@@ -77,11 +47,6 @@ class AssistActivity : AppCompatActivity() {
 
     private var captureIntentCode = -1
     private var captureIntentData: Intent? = null
-
-    /** 免责同意态（仅本实例内存，经 savedInstanceState 跨配置重建）：普通 AlertDialog
-     *  不随配置重建恢复——弹窗在屏时旋转会被系统强制关闭，冷启动条件又不再成立，
-     *  不补弹即静默旁路合规门槛（体检 P1）。未同意 ⇒ 重建后 onResume 补弹。 */
-    private var disclaimerAgreed = false
 
     // 步骤行（①②整行可点，③静态说明行）
     private lateinit var btnOverlay: View
@@ -172,26 +137,8 @@ class AssistActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.assist_activity)
 
-        // 每次应用启动必弹（本页即 launcher，继承原主页启动语义）；savedInstanceState
-        // 守卫：配置重建走恢复路径，不在同一次启动内重复弹窗；isTaskRoot 守卫：
-        // singleTask 复用/外部唤起（通知点入）不新建实例不重弹，只对真冷启动弹
-        if (savedInstanceState == null && isTaskRoot()) {
-            maybeShowDisclaimer()
-        } else {
-            // 配置重建恢复路径：恢复上一实例的同意态；尚未同意（弹窗在屏时旋转等）
-            // 则补弹——冷启动条件在重建路径永不成立，不补即被静默旁路（体检 P1）
-            disclaimerAgreed = savedInstanceState?.getBoolean(KEY_DISCLAIMER_AGREED, false) ?: false
-            if (!disclaimerAgreed) maybeShowDisclaimer()
-        }
-
-        // 底部入口：帮助（本地帮助页）/ 关于（本地对话框）——原主页文字入口迁入连线页
-        findViewById<Button>(R.id.button_help).setOnClickListener {
-            val intent = Intent(this, com.xqdk.chess.views.WebviewActivity::class.java).apply {
-                putExtra("url", "file:///android_asset/help.html")
-            }
-            startActivity(intent)
-        }
-        findViewById<Button>(R.id.button_about).setOnClickListener { showAboutDialog() }
+        // 免责弹窗/帮助/关于已上移开局分流落地页（LauncherActivity，2026-11-09），
+        // 本页由落地页进入，不再重复承担启动语义
 
         btnOverlay = findViewById(R.id.btn_overlay_permission)
         btnNotify = findViewById(R.id.btn_notification_permission)
@@ -329,54 +276,7 @@ class AssistActivity : AppCompatActivity() {
         // bindService 返回值决定是否需要解绑：绑定失败仍置 bound 会在 onDestroy 泄漏连接
         bound = bindService(Intent(this, ScreenAssistService::class.java), connection, Context.BIND_AUTO_CREATE)
 
-        // 检查更新：仅手动触发（不主动检查是产品拍板）。查询走独立线程
-        // （AppUpdateChecker.fetchReleasesJson 为网络 IO，3s 超时），结果回主线程
-        // 弹窗/Toast；按钮检查期间禁用防重复点击。失败如实提示——
-        // api.github.com 在中国大陆通常需可访问 GitHub 的网络环境
-        val btnUpdate = findViewById<Button>(R.id.btn_check_update)
-        btnUpdate.setOnClickListener {
-            btnUpdate.isEnabled = false
-            btnUpdate.text = "检查中…"
-            val checker = com.xqdk.chess.assist.AppUpdateChecker(
-                com.xqdk.chess.BuildConfig.BUILD_DATE
-            )
-            // 一次性线程（查询完毕自然回收，不留滞留池）
-            Thread {
-                val result = checker.check()
-                runOnUiThread {
-                    btnUpdate.isEnabled = true
-                    btnUpdate.text = "检查"
-                    when (result) {
-                        is com.xqdk.chess.assist.UpdateResult.UpToDate ->
-                            Toast.makeText(this,
-                                "已是最新版本（构建日期 ${com.xqdk.chess.BuildConfig.BUILD_DATE}）",
-                                Toast.LENGTH_SHORT).show()
-                        is com.xqdk.chess.assist.UpdateResult.Newer ->
-                            androidx.appcompat.app.AlertDialog.Builder(this)
-                                .setTitle("发现新版本 ${result.tag}")
-                                .setMessage(
-                                    "最新稳定版发布于 ${result.date}（当前构建 ${com.xqdk.chess.BuildConfig.BUILD_DATE}）。\n\n" +
-                                    "APK 请从 GitHub Release 页面下载安装（需要可访问 GitHub 的网络环境）。\n\n" +
-                                    "注意：v3.2 起为官方安全版本线（全新签名证书 + 发布指纹门禁）。\n" +
-                                    "从本版及更早版本升级需先卸载再安装（仅此一次，之后恢复覆盖升级）。" +
-                                    "请只从官方渠道下载，证书指纹可在 README 核验。"
-                                )
-                                .setPositiveButton("打开下载页") { _, _ ->
-                                    runCatching {
-                                        startActivity(
-                                            Intent(Intent.ACTION_VIEW, Uri.parse(
-                                                com.xqdk.chess.assist.AppUpdateChecker.RELEASES_PAGE))
-                                        )
-                                    }
-                                }
-                                .setNegativeButton("取消", null)
-                                .show()
-                        is com.xqdk.chess.assist.UpdateResult.Failure ->
-                            Toast.makeText(this, result.message, Toast.LENGTH_LONG).show()
-                    }
-                }
-            }.start()
-        }
+        // 检查更新入口已上移落地页页脚（2026-11-10 用户拍板），本页不再承载
     }
 
     override fun onResume() {
@@ -420,47 +320,6 @@ class AssistActivity : AppCompatActivity() {
             .putExtra(ScreenAssistService.EXTRA_RESULT_CODE, captureIntentCode)
             .putExtra(ScreenAssistService.EXTRA_RESULT_DATA, captureIntentData)
         ContextCompat.startForegroundService(this, intent)
-    }
-
-    /**
-     * 免责声明弹窗：每次启动必弹（无可跳过、无持久化跳过），明确"仅供学习研究、
-     * 禁止用于对局平台"等使用边界；同意后进入连线页，不同意直接退出应用。
-     */
-    private fun maybeShowDisclaimer() {
-        androidx.appcompat.app.AlertDialog.Builder(this)
-            .setTitle("免责声明")
-            .setMessage(DISCLAIMER)
-            .setCancelable(false)
-            .setPositiveButton("同意并继续") { d, _ ->
-                disclaimerAgreed = true
-                d.dismiss()
-            }
-            .setNegativeButton("不同意并退出") { _, _ ->
-                finishAffinity()
-            }
-            .show()
-    }
-
-    override fun onSaveInstanceState(outState: Bundle) {
-        super.onSaveInstanceState(outState)
-        outState.putBoolean(KEY_DISCLAIMER_AGREED, disclaimerAgreed)
-    }
-
-    /** 关于：本地对话框（特色功能 + 免责声明 + 鸣谢），不依赖外部站点 */
-    private fun showAboutDialog() {
-        val text = "象棋迪克 XQDK v${com.xqdk.chess.BuildConfig.VERSION_NAME}\n\n" +
-            "特色功能：\n" +
-            "· AI 连线识别：ONNX 角点式（主力）/ YOLO 免校准屏幕识别、自动朝向、" +
-            "悬浮窗实时走法建议、开局库速查、多候选与紧急手动模式（只识别提示，不自动走子）；\n" +
-            "· 内置 Pikafish 引擎与桔库开局库，深度/时间双思考制式可选。\n\n" +
-            DISCLAIMER + "\n\n" +
-            CREDITS
-        androidx.appcompat.app.AlertDialog.Builder(this)
-            .setTitle("关于 · 象棋迪克")
-            .setIcon(com.xqdk.chess.R.drawable.ic_launcher)
-            .setMessage(text)
-            .setPositiveButton("我知道了", null)
-            .show()
     }
 
     /** 文本变化才 setText（1s 轮询不重写视图，避免频跳） */

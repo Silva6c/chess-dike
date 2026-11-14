@@ -72,6 +72,13 @@ public class Board implements Serializable {
         return false;
     }
 
+    /**
+     * 按坐标设置棋子（chess-fish 同名 API，Rule 移植依赖；内部转 Position 复用校验）
+     */
+    public boolean setPieceByPosition(int x, int y, int value) {
+        return setPieceByPosition(new Position(x, y), value);
+    }
+
     public int getPieceByPosition(Position pos) {
         if(isValidPosition(pos)){
             return piece[pos.y][pos.x];

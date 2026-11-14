@@ -1,0 +1,214 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/xq_paper"
+    android:fillViewport="true"
+    android:scrollbars="none">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp"
+        android:paddingTop="40dp"
+        android:paddingBottom="24dp">
+
+        <!-- 品牌块 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:fontFamily="serif"
+            android:letterSpacing="0.02"
+            android:text="@string/app_name"
+            android:textColor="@color/xq_ink_text"
+            android:textSize="28sp"
+            android:textStyle="bold"
+            tools:ignore="HardcodedText" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="4dp"
+            android:text="象棋学习助手 · 全离线开源"
+            android:textColor="@color/xq_muted"
+            android:textSize="12sp"
+            tools:ignore="HardcodedText" />
+
+        <com.xqdk.chess.assist.ui.RiverLineView
+            android:layout_width="match_parent"
+            android:layout_height="1.5dp"
+            android:layout_marginTop="16dp" />
+
+        <!-- 便当盒大卡：学习模式（比连线页主按钮更大的一级入口） -->
+        <LinearLayout
+            android:id="@+id/card_learn"
+            android:layout_width="match_parent"
+            android:layout_height="112dp"
+            android:layout_marginTop="28dp"
+            android:background="@drawable/bento_card"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="20dp"
+            android:paddingEnd="20dp">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="学习模式"
+                    android:textColor="@color/xq_ink_text"
+                    android:textSize="15sp"
+                    android:textStyle="bold"
+                    tools:ignore="HardcodedText" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="人机对弈 · 走子纠正教学 · 走势曲线"
+                    android:textColor="@color/xq_muted"
+                    android:textSize="12sp"
+                    tools:ignore="HardcodedText" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="→"
+                android:textColor="@color/xq_zhu"
+                android:textSize="22sp"
+                android:textStyle="bold"
+                tools:ignore="HardcodedText" />
+        </LinearLayout>
+
+        <!-- 便当盒大卡：连线模式 -->
+        <LinearLayout
+            android:id="@+id/card_assist"
+            android:layout_width="match_parent"
+            android:layout_height="112dp"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/bento_card"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="20dp"
+            android:paddingEnd="20dp">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="连线模式"
+                    android:textColor="@color/xq_ink_text"
+                    android:textSize="15sp"
+                    android:textStyle="bold"
+                    tools:ignore="HardcodedText" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="屏幕识别 · 悬浮窗走法指导"
+                    android:textColor="@color/xq_muted"
+                    android:textSize="12sp"
+                    tools:ignore="HardcodedText" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="→"
+                android:textColor="@color/xq_zhu"
+                android:textSize="22sp"
+                android:textStyle="bold"
+                tools:ignore="HardcodedText" />
+        </LinearLayout>
+
+        <!-- 帮助 / 关于（半宽小卡，原连线页入口上移至此） -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:orientation="horizontal">
+
+            <!-- Material3 下 Button 实为 MaterialButton：自定义背景必须用 app: 前缀的
+                 backgroundTint 退出主题色染色（android: 前缀挡不住，浅色卡面被染成
+                 colorPrimary 深色——2026-11-10 用户反馈"按钮颜色过深"根因） -->
+            <Button
+                android:id="@+id/button_help"
+                android:layout_width="0dp"
+                android:layout_height="56dp"
+                android:layout_marginEnd="8dp"
+                android:layout_weight="1"
+                android:background="@drawable/bento_card_zhu"
+                app:backgroundTint="@null"
+                android:stateListAnimator="@null"
+                android:text="@string/main_help"
+                android:textColor="@color/xq_ink_text"
+                android:textSize="13sp"
+                tools:ignore="HardcodedText" />
+
+            <Button
+                android:id="@+id/button_about"
+                android:layout_width="0dp"
+                android:layout_height="56dp"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:background="@drawable/bento_card_zhu"
+                app:backgroundTint="@null"
+                android:stateListAnimator="@null"
+                android:text="@string/main_about"
+                android:textColor="@color/xq_ink_text"
+                android:textSize="13sp"
+                tools:ignore="HardcodedText" />
+        </LinearLayout>
+
+        <!-- 版本页脚（低调收尾，与页面纸感一致）：版本+构建日期左、检查更新芯片右。
+             检查更新自连线页上移（2026-11-10 用户拍板），逻辑见 LauncherActivity -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/tv_version_footer"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textColor="@color/xq_muted"
+                android:textSize="11sp"
+                tools:text="v3.3 · 构建 20261110" />
+
+            <Button
+                android:id="@+id/btn_check_update"
+                style="@style/ValueChip"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="检查更新"
+                tools:ignore="HardcodedText" />
+        </LinearLayout>
+    </LinearLayout>
+</ScrollView>
